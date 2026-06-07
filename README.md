@@ -1,4 +1,4 @@
-# CommonLibF4 Plugin Template
+# Capital Wasteland Script Extender
 
 This is a basic plugin template using CommonLibF4.
 
@@ -8,8 +8,8 @@ This is a basic plugin template using CommonLibF4.
 
 ## Getting Started
 ```bat
-git clone --recurse-submodules https://github.com/libxse/commonlibf4-template
-cd commonlibf4-template
+git clone --recurse-submodules https://github.com/Pouya69/F4CW-SE
+cd F4CW-SE
 ```
 
 ### Build
@@ -50,6 +50,3 @@ If you want to upgrade the project's dependencies, run the following commands:
 xmake repo --update
 xmake require --upgrade
 ```
-
-## Documentation
-Please refer to the [Wiki](../../wiki/Home) for more advanced topics.
