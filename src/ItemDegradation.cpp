@@ -565,7 +565,7 @@ float F4CW::ItemDegradation::GetDegradationMapping(RE::TESAmmo* AmmoToCheck)
 
 float F4CW::ItemDegradation::GetDefaultAmmoDegradation()
 {
-	return CWGlobals.AmmoDefaultDegradation->GetValue();
+	return CWGlobals.AmmoDefaultDegradation ? CWGlobals.AmmoDefaultDegradation->GetValue() : 0.01f;
 }
 
 bool F4CW::ItemDegradation::RegisterDegradationFunctions(RE::BSScript::IVirtualMachine* vm)

@@ -18,6 +18,8 @@ namespace Shared {
 	RE::BGSKeyword* noDegradation;
 	bool noArmorDegradation;
 	bool noWeaponDegradation;
+	const float fAutomaticWeaponConditionReduction = 0.5f;
+	const float fBoltWeaponConditionReduction = 2.0f;
 
 	RE::BGSKeyword* crWeaponRanged;
 

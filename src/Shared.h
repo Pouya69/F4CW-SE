@@ -8,6 +8,9 @@ namespace Shared {
 	extern bool noArmorDegradation;
 	extern bool noWeaponDegradation;
 
+	extern const float fAutomaticWeaponConditionReduction;
+	extern const float fBoltWeaponConditionReduction;
+
 	extern RE::BGSKeyword* crWeaponRanged;
 
 	void InitializeSharedForms(RE::TESDataHandler* dataHandler);

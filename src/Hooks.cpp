@@ -18,6 +18,27 @@
 #include <RE/T/TESObjectWEAP.h>
 #include <RE/W/WEAPON_TYPE.h>
 #include <REX/LOG.h>
+#include <RE/A/Actor.h>
+#include <RE/A/ActorValueInfo.h>
+#include <RE/E/ExtraDataList.h>
+#include <RE/E/EXTRA_DATA_TYPE.h>
+#include <RE/P/PlayerCharacter.h>
+#include <RE/A/AlchemyItem.h>
+#include <RE/B/BGSEquipIndex.h>
+#include <RE/B/BGSObjectInstance.h>
+#include <RE/B/BSCoreTypes.h>
+#include <RE/T/TESObjectREFR.h>
+#include "ItemDegradation.h"
+#include <RE/E/EquippedItem.h>
+#include <RE/P/PipboyDataManager.h>
+#include <RE/W/WEAPON_FLAGS.h>
+#include <RE/A/ActorEquipManager.h>
+#include <RE/S/SendHUDMessage.h>
+#include <RE/S/Setting.h>
+#include <RE/B/BGSBodyPart.h>
+#include <RE/B/BGSTypedFormValuePair.h>
+#include <RE/B/BSTArray.h>
+#include <RE/B/BSTTuple.h>
 
 namespace F4CW {
 	namespace Hooks {
@@ -88,10 +109,49 @@ namespace F4CW {
 			AddItem_Original(a_this, a_boundObject, a_stack, a_oldCount, a_newCount);
 		}
 
+		DetourXS hook_GetEquippedDamageResistance;
+		typedef float(GetEquippedDamageResistanceSig)(RE::Actor*, const RE::ActorValueInfo*);
+		REL::Relocation<GetEquippedDamageResistanceSig> GetEquippedDamageResistanceOriginal;
+		float Hook_GetEquippedDamageResistance(RE::Actor* a_actor, const RE::ActorValueInfo* a_info)
+		{
+			float retailResistance = GetEquippedDamageResistanceOriginal(a_actor, a_info);
+			// Only calculated for the player.
+			if (a_actor != RE::PlayerCharacter::GetSingleton())
+				return retailResistance;
+
+			RE::BGSInventoryList* inventoryList = a_actor->inventoryList;
+			inventoryList->rwLock.lock_read();
+
+			for (RE::BGSInventoryItem& inventoryItem : inventoryList->data) {
+				RE::TESObjectARMO* armor = static_cast<RE::TESObjectARMO*>(inventoryItem.object);
+				if (inventoryItem.object && armor->formType == RE::ENUM_FORM_ID::kARMO && armor->Protects(a_info, false)) {
+					if (!inventoryItem.IsEquipped(0))
+						continue;
+
+					RE::ExtraDataList* dataList = inventoryItem.stackData->extra.get();
+					if (!dataList->HasType(RE::EXTRA_DATA_TYPE::kHealth))
+						continue;
+
+					float currentHealth = dataList->GetHealthPerc();
+					if (currentHealth <= 0.0f) {
+						// Fully broken. No damage resistance.
+						return 0.0f;
+					}
+
+					REX::DEBUG("Damage resistance prior to condition modifier: {}", retailResistance);
+					const float conditionModifier = 0.66f + min(0.34 * currentHealth / 0.5f, 0.34f);
+					retailResistance *= conditionModifier;
+					REX::DEBUG("Damage resistance after condition modifier: {}", retailResistance);
+				}
+			}
+
+			inventoryList->rwLock.unlock_read();
+			return retailResistance;
+		}
+
 		DetourXS hook_CombatFormulasCalcWeaponDamage;
 		typedef float(CombatFormulasCalcWeaponDamageSig)(const RE::TESForm*, const RE::TESObjectWEAP::InstanceData*, const RE::TESAmmo*, float, float);
 		REL::Relocation<CombatFormulasCalcWeaponDamageSig> CombatFormulasCalcWeaponDamageOriginal;
-
 		float Hook_CombatFormulasCalcWeaponDamage(const RE::TESForm* a_actorForm, const RE::TESObjectWEAP::InstanceData* a_weapon, const RE::TESAmmo* a_ammo, float a_condition, float a_damageMultiplier)
 		{
 			float retailDamage = CombatFormulasCalcWeaponDamageOriginal(a_actorForm, a_weapon, a_ammo, a_condition, a_damageMultiplier);
@@ -101,12 +161,103 @@ namespace F4CW {
 			}
 			return retailDamage;
 		}
+
+		DetourXS hook_TESObjectWeaponFire;
+		typedef void(TESObjectWeaponFireSig)(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>*, RE::TESObjectREFR*, RE::BGSEquipIndex, RE::TESAmmo*, RE::AlchemyItem*);
+		REL::Relocation<TESObjectWeaponFireSig> TESObjectWeaponFireOriginal;
+		void Hook_TESObjectWeaponFire(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>* a_weapon, RE::TESObjectREFR* a_source, RE::BGSEquipIndex a_equipIndex, RE::TESAmmo* a_ammo, RE::AlchemyItem* a_poiso) {
+			TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
+			if (!a_source)
+				return;
+
+			// Only apply Weapon Condition Change on Player.
+			RE::PlayerCharacter* playerCharacter = RE::PlayerCharacter::GetSingleton();
+			if (a_source != playerCharacter)
+				return;
+
+			if (playerCharacter->IsGodMode() || Shared::noWeaponDegradation)
+				return;
+
+			RE::TESObjectWEAP* weaponObject = static_cast<RE::TESObjectWEAP*>(a_weapon->object);
+
+			if (weaponObject->weaponData.type == RE::WEAPON_TYPE::kGrenade || weaponObject->weaponData.type == RE::WEAPON_TYPE::kMine
+				|| weaponObject->HasKeyword(Shared::noDegradation))
+				return;
+
+			// Getting the inventory form of the a_weapon
+			RE::BGSInventoryItem* inventoryItem = nullptr;
+			RE::TESFormID weaponFormID = a_weapon->object->GetFormID();
+			for (RE::BGSInventoryItem& item : playerCharacter->inventoryList->data) {
+				if (item.object->GetFormID() == weaponFormID) {
+					inventoryItem = &item;
+					break;
+				}
+			}
+			if (!inventoryItem)
+				return;
+
+			RE::EquippedItem& equippedItem = playerCharacter->currentProcess->middleHigh->equippedItems[0];
+			RE::TESObjectWEAP::InstanceData* weaponInstanceData = static_cast<RE::TESObjectWEAP::InstanceData*>(a_weapon->instanceData.get());
+
+			RE::TESAmmo* weaponAmmo = weaponInstanceData->ammo;
+
+			float degradationAmount = ItemDegradation::GetDegradationMapping(weaponAmmo);
+			if (degradationAmount == 0.01f)
+				REX::WARN("TESObjectWEAP::Fire - degradation ammo mapping for ammo type '{}' is not declared in 'AmmoDegradationMap' defaulting to 0.01f", weaponAmmo->GetFormEditorID());
+
+			const std::uint32_t flags = weaponInstanceData->flags.underlying();
+			if (flags & (std::uint32_t)RE::WEAPON_FLAGS::kAutomatic)
+				degradationAmount *= Shared::fAutomaticWeaponConditionReduction;
+			else if (flags & (std::uint32_t)RE::WEAPON_FLAGS::kBoltAction)
+				degradationAmount *= Shared::fBoltWeaponConditionReduction;
+
+			// Linear reduction from 0 - 100, 100 resulting in 20% less damage to weapon.
+			// Mapped out. from 0 to 20%
+			RE::ActorValueInfo* gunSkill = weaponInstanceData->skill;
+			float playerGunSkill = 0.0f;
+			if (gunSkill) {
+				REX::DEBUG("Weapon '{}' set to skill '{}'", a_weapon->object->GetFormEditorID(), gunSkill->GetFormEditorID());
+				playerGunSkill = playerCharacter->GetActorValue(*gunSkill);
+			}
+			else {
+				REX::DEBUG("Weapon '{}' is missing skill value. Change this value in xEdit.", a_weapon->object->GetFormEditorID());
+			}
+			degradationAmount *= 1.0f - (playerGunSkill / 100.0f * 0.2f);
+
+			RE::ExtraDataList* extraDataList = inventoryItem->stackData->extra.get();
+			
+			float currentWeaponHealth = max(extraDataList->GetHealthPerc() - degradationAmount, 0.0f);
+			if (currentWeaponHealth == 0.0f) {
+				// Weapon breaks.
+				RE::ActorEquipManager::GetSingleton()->UnequipItem(playerCharacter, &equippedItem, false);
+				RE::GameSettingCollection* gameSettingCollection = RE::GameSettingCollection::GetSingleton();
+				RE::SendHUDMessage::ShowHUDMessage(gameSettingCollection->GetSetting("sWeaponBreak")->GetString().data(), "UIWorkshopModeItemScrapGeneric", true, true);
+			}
+
+			extraDataList->SetHealthPerc(currentWeaponHealth);
+			RE::PipboyDataManager::GetSingleton()->inventoryData.RepopulateItemCardOnSection(RE::ENUM_FORM_ID::kWEAP);
+		}
+
+		DetourXS hook_CombatFormulasCalcTargetedLimbDamage;
+		typedef float(CombatFormulasCalcTargetedLimbDamageSig)(RE::Actor*, const RE::BGSBodyPart*, float, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>*);
+		REL::Relocation<CombatFormulasCalcTargetedLimbDamageSig> CombatFormulasCalcTargetedLimbDamageOriginal;
+		float CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes) {
+			float retailDamage = CombatFormulasCalcTargetedLimbDamageOriginal(a_actor, a_bodyPart, a_physicalDamage, a_damageTypes);
+			
+
+			return retailDamage;
+		}
+
 		
 		
 		namespace Registers {
 			void RegisterAllHooks() {
 				RegisterDetourFunction(hook_CombatFormulasCalcWeaponDamage, RE::ID::CombatFormulas::CalcWeaponDamage, &Hook_CombatFormulasCalcWeaponDamage, CombatFormulasCalcWeaponDamageOriginal, "CalcWeaponDamage");
 				RegisterDetourFunction(hook_AddItem, RE::ID::BGSInventoryList::AddItem1, &Hook_BGSInventoryListAddItem, AddItem_Original, "AddItem");
+				RegisterDetourFunction(hook_GetEquippedDamageResistance, RE::ID::ActorUtils::GetEquippedArmorDamageResistance, &Hook_GetEquippedDamageResistance, GetEquippedDamageResistanceOriginal, "GetEquippedArmorDamageResistance");
+				RegisterDetourFunction(hook_TESObjectWeaponFire, RE::ID::TESObjectWEAP::Fire, &Hook_TESObjectWeaponFire, TESObjectWeaponFireOriginal, "TESObjectWeaponFire");
+				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
+
 			}
 
 			void Install()
