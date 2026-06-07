@@ -9,7 +9,7 @@ This is a basic plugin template using CommonLibF4.
 ## Getting Started
 ```bat
 git clone --recurse-submodules https://github.com/Pouya69/F4CW-SE
-cd F4CW-SE
+cd F4CW-SE-main
 ```
 
 ### Build
