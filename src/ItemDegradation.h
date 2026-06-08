@@ -118,6 +118,7 @@ namespace F4CW {
 		// void UpdateWeaponStats(ItemDegradation::WeaponConditionData myConditionData);
 		float GetWeaponDamage(ItemDegradation::WeaponConditionData myConditionData);
 		float CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, float currentCondition);
+		float CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, float currentCondition);
 		/*
 		RE::TESForm* GetEquippedWeaponForm(RE::Actor* actor);
 		std::uint64_t GetEquippedWeaponHandleID(RE::Actor* actor);
@@ -125,6 +126,7 @@ namespace F4CW {
 		*/
 		// RE::TESObjectWEAP::InstanceData* CastInstanceData(RE::TBO_InstanceData* myInstanceData);
 		bool IsMeleeWeapon(ItemDegradation::WeaponConditionData myConditionData);
+		bool IsMeleeWeapon(RE::WEAPON_TYPE weaponType);
 
 		RE::BGSKeyword* GetWeaponRepairKeyword(RE::TESObjectWEAP* myWeapon);
 		RE::BGSListForm* GetLinkedWeaponRepairListFromKeyword(RE::BGSKeyword* myKeyword);

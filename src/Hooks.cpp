@@ -155,10 +155,10 @@ namespace F4CW {
 		float Hook_CombatFormulasCalcWeaponDamage(const RE::TESForm* a_actorForm, const RE::TESObjectWEAP::InstanceData* a_weapon, const RE::TESAmmo* a_ammo, float a_condition, float a_damageMultiplier)
 		{
 			float retailDamage = CombatFormulasCalcWeaponDamageOriginal(a_actorForm, a_weapon, a_ammo, a_condition, a_damageMultiplier);
+
 			if (a_condition != -1.0f || a_condition < 0.75f)
-			{
 				retailDamage = retailDamage * (0.5f + min((0.5f * a_condition) / 0.75f, 0.5f));
-			}
+
 			return retailDamage;
 		}
 
@@ -207,9 +207,9 @@ namespace F4CW {
 
 			const std::uint32_t flags = weaponInstanceData->flags.underlying();
 			if (flags & (std::uint32_t)RE::WEAPON_FLAGS::kAutomatic)
-				degradationAmount *= Shared::fAutomaticWeaponConditionReduction;
+				degradationAmount *= Shared::fAutomaticWeaponConditionReduction->GetValue();
 			else if (flags & (std::uint32_t)RE::WEAPON_FLAGS::kBoltAction)
-				degradationAmount *= Shared::fBoltWeaponConditionReduction;
+				degradationAmount *= Shared::fBoltWeaponConditionReduction->GetValue();
 
 			// Linear reduction from 0 - 100, 100 resulting in 20% less damage to weapon.
 			// Mapped out. from 0 to 20%
@@ -231,20 +231,64 @@ namespace F4CW {
 				// Weapon breaks.
 				RE::ActorEquipManager::GetSingleton()->UnequipItem(playerCharacter, &equippedItem, false);
 				RE::GameSettingCollection* gameSettingCollection = RE::GameSettingCollection::GetSingleton();
-				RE::SendHUDMessage::ShowHUDMessage(gameSettingCollection->GetSetting("sWeaponBreak")->GetString().data(), "UIWorkshopModeItemScrapGeneric", true, true);
+				RE::SendHUDMessage::ShowHUDMessage(gameSettingCollection->GetSetting("sWeaponBreak")->GetString().data(), "00DCUIWeaponBreak", true, true);
 			}
 
 			extraDataList->SetHealthPerc(currentWeaponHealth);
+			weaponObject->weaponData.attackDelaySec = WPNUtilities::CalculateUpdatedRateOfFireValue(weaponObject, currentWeaponHealth);
 			RE::PipboyDataManager::GetSingleton()->inventoryData.RepopulateItemCardOnSection(RE::ENUM_FORM_ID::kWEAP);
 		}
 
 		DetourXS hook_CombatFormulasCalcTargetedLimbDamage;
 		typedef float(CombatFormulasCalcTargetedLimbDamageSig)(RE::Actor*, const RE::BGSBodyPart*, float, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>*);
 		REL::Relocation<CombatFormulasCalcTargetedLimbDamageSig> CombatFormulasCalcTargetedLimbDamageOriginal;
-		float CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes) {
+		float Hook_CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes) {
 			float retailDamage = CombatFormulasCalcTargetedLimbDamageOriginal(a_actor, a_bodyPart, a_physicalDamage, a_damageTypes);
 			
+			RE::PlayerCharacter* playerCharacter = RE::PlayerCharacter::GetSingleton();
+			if (a_actor == playerCharacter && (playerCharacter->IsGodMode() || Shared::noArmorDegradation))
+				return retailDamage;
 
+			RE::ActorValueInfo* targetedLimbAV = a_bodyPart->data.actorValue;
+			const float DR_ForHitLimb = RE::ActorUtils::GetEquippedArmorDamageResistance(a_actor, targetedLimbAV);
+
+			if (DR_ForHitLimb >= a_physicalDamage)
+				return retailDamage;
+
+			RE::BGSInventoryList* inventoryList = a_actor->inventoryList;
+			inventoryList->rwLock.lock_read();
+			for (RE::BGSInventoryItem& inventoryItem : inventoryList->data) {
+				if (!inventoryItem.IsEquipped(0))
+					continue;
+
+				RE::TESObjectARMO* armor = static_cast<RE::TESObjectARMO*>(inventoryItem.object);
+				if (inventoryItem.object && armor->formType == RE::ENUM_FORM_ID::kARMO && armor->Protects(targetedLimbAV, false)) {
+					RE::ExtraDataList* armorExtraData = inventoryItem.stackData->extra.get();
+					// If armor does not have kHealth, it would return -1.
+					float armourHealth = armorExtraData->GetHealthPerc();
+
+					if (armourHealth > 0.0f) {
+						REX::DEBUG("Armor condition of '{}' before degradation: {}", armor->GetFormEditorID(), armourHealth);
+						const float degradationAmount = (a_physicalDamage - DR_ForHitLimb) / DR_ForHitLimb * Shared::fArmourConditionReductionPerPercentage->GetValue();
+						armourHealth = max(armourHealth - degradationAmount, 0.0f);
+
+						if (armourHealth == 0.0f) {
+							// Armor breaks.
+							RE::BGSObjectInstance* armorInstance = new RE::BGSObjectInstance(armor, &armor->armorData);
+							inventoryList->rwLock.unlock_read();
+							RE::ActorEquipManager::GetSingleton()->UnequipObject(a_actor, armorInstance, 1, armor->equipSlot, 0, false, false, true, true, nullptr);
+							inventoryList->rwLock.lock_read();
+
+							// For now. No idea how Frenarn's code works for $CAS_ArmorBreak
+							RE::SendHUDMessage::ShowHUDMessage(RE::GameSettingCollection::GetSingleton()->GetSetting("sWeaponBreak")->GetString().data(), "00DCUIWeaponBreak", true, true);
+						}
+
+						REX::DEBUG("Armor condition of '{}' after degradation: {}", armor->GetFormEditorID(), armourHealth);
+					}
+					break;
+				}
+			}
+			inventoryList->rwLock.unlock_read();
 			return retailDamage;
 		}
 
@@ -256,7 +300,7 @@ namespace F4CW {
 				RegisterDetourFunction(hook_AddItem, RE::ID::BGSInventoryList::AddItem1, &Hook_BGSInventoryListAddItem, AddItem_Original, "AddItem");
 				RegisterDetourFunction(hook_GetEquippedDamageResistance, RE::ID::ActorUtils::GetEquippedArmorDamageResistance, &Hook_GetEquippedDamageResistance, GetEquippedDamageResistanceOriginal, "GetEquippedArmorDamageResistance");
 				RegisterDetourFunction(hook_TESObjectWeaponFire, RE::ID::TESObjectWEAP::Fire, &Hook_TESObjectWeaponFire, TESObjectWeaponFireOriginal, "TESObjectWeaponFire");
-				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
+				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &Hook_CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
 
 			}
 
@@ -269,4 +313,3 @@ namespace F4CW {
 		}
 	}
 }
-

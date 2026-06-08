@@ -8,8 +8,10 @@ namespace Shared {
 	extern bool noArmorDegradation;
 	extern bool noWeaponDegradation;
 
-	extern const float fAutomaticWeaponConditionReduction;
-	extern const float fBoltWeaponConditionReduction;
+	extern RE::TESGlobal* fAutomaticWeaponConditionReduction;
+	extern RE::TESGlobal* fBoltWeaponConditionReduction;
+
+	extern RE::TESGlobal* fArmourConditionReductionPerPercentage;
 
 	extern RE::BGSKeyword* crWeaponRanged;
 

@@ -18,8 +18,12 @@ namespace Shared {
 	RE::BGSKeyword* noDegradation;
 	bool noArmorDegradation;
 	bool noWeaponDegradation;
-	const float fAutomaticWeaponConditionReduction = 0.5f;
-	const float fBoltWeaponConditionReduction = 2.0f;
+
+	RE::TESGlobal* fAutomaticWeaponConditionReduction;
+	RE::TESGlobal* fBoltWeaponConditionReduction;
+
+	RE::TESGlobal* fArmourConditionReductionPerPercentage;
+
 
 	RE::BGSKeyword* crWeaponRanged;
 
@@ -28,6 +32,11 @@ namespace Shared {
 	{
 		crWeaponRanged = dataHandler->LookupForm<RE::BGSKeyword>(0x0DEDC5, "Fallout4.esm");
 		noDegradation = dataHandler->LookupForm<RE::BGSKeyword>(0x189348, MOD_ESM);
+
+		fAutomaticWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x000D18, CURRENT_ESP);
+		fBoltWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x000D19, CURRENT_ESP);
+
+		fArmourConditionReductionPerPercentage = dataHandler->LookupForm<RE::TESGlobal>(0x000D1A, CURRENT_ESP);
 	}
 
 }

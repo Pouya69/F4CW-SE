@@ -419,7 +419,9 @@ namespace F4CW {
 	{}
 
 	void InitializeWeaponCondition(ItemDegradation::WeaponConditionData myConditionData)
-	{}
+	{
+		
+	}
 	void InitializeWeaponCondition(RE::TESObjectREFR * myRef)
 	{
 		if (!myRef)
@@ -673,7 +675,10 @@ void F4CW::DegradationPapyrus::ModEquippedWeaponConditionPercentage_Papyrus(std:
 
 	LOG_INFO(std::format("Initial Condition = {}, New Condition = {}", percentageInitial, percentageIncrease));
 	SetWeaponConditionPercent(actorData, percentageIncrease);
-	WPNUtilities::UpdateWeaponStats(actorData);
+
+	// @TODO
+	// WPNUtilities::UpdateWeaponStats(actorData);
+
 	if (myActor == RE::PlayerCharacter::GetSingleton())
 	{
 		WPNUtilities::UpdateHUDCondition(actorData);
@@ -996,11 +1001,16 @@ float F4CW::WPNUtilities::GetWeaponDamage(ItemDegradation::WeaponConditionData m
 
 float F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, float currentCondition)
 {
+	return CalculateUpdatedRateOfFireValue(myConditionData.Form, currentCondition);
+}
+
+float F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, float currentCondition)
+{
 	using namespace ItemDegradation;
 	// the calculation here is a bit weird in FO4, Fire Rate is linked to attack delay, with attack delay, the lower it is the higher the Fire Rate
 		// instead of multiplying the base attack delay by a set amount instead we divide to make attack delay longer and in turn Fire Rate lower
 
-	RE::TESObjectWEAP* baseWPNForm = static_cast<RE::TESObjectWEAP*>(myConditionData.Form);
+	RE::TESObjectWEAP* baseWPNForm = static_cast<RE::TESObjectWEAP*>(weaponForm);
 
 	float baseROF = baseWPNForm->weaponData.attackDelaySec;	//	unkC0 == fAttackSeconds;
 
@@ -1056,9 +1066,14 @@ float F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(ItemDegradation::Weapo
 
 bool F4CW::WPNUtilities::IsMeleeWeapon(ItemDegradation::WeaponConditionData myConditionData)
 {
+	return IsMeleeWeapon(myConditionData.instance->type.get());
+}
+
+bool F4CW::WPNUtilities::IsMeleeWeapon(RE::WEAPON_TYPE weaponType)
+{
 	bool result = false;
 
-	switch (myConditionData.instance->type.get())
+	switch (weaponType)
 	{
 	case RE::WEAPON_TYPE::kHandToHand:
 	case RE::WEAPON_TYPE::kOneHandAxe:
@@ -1077,6 +1092,7 @@ bool F4CW::WPNUtilities::IsMeleeWeapon(ItemDegradation::WeaponConditionData myCo
 
 	return result;
 }
+
 
 /*
 RE::TESObjectWEAP::InstanceData* F4CW::WPNUtilities::CastInstanceData(RE::TBO_InstanceData * myInstanceData)
