@@ -55,6 +55,7 @@
 
 namespace F4CW {
 	namespace ItemDegradation {
+		std::unordered_map<RE::TESObjectWEAP*, CWWeaponConditionInfo> WeaponConditionMapping;
 
 		std::unordered_map<RE::TESAmmo*, float> AmmoDegradationMap;
 
@@ -204,11 +205,12 @@ namespace F4CW {
 			if (myActor)
 			{
 				auto weapon = static_cast<RE::TESObjectREFR*>(myActor->currentProcess->middleHigh->equippedItems[0].item.object);
+				// auto weaponObject = static_cast<RE::TESObjectWEAP*>(myActor->currentProcess->middleHigh->equippedItems[0].item.object);
 				if (weapon) {
 					actor = myActor;
 					Form = weapon;
 					extraData = weapon->extraList.get();
-					instance = GetWeaponInstanceData(extraData);
+					instance = static_cast<RE::TESObjectWEAP::InstanceData*>(myActor->currentProcess->middleHigh->equippedItems[0].item.instanceData.get());
 					invHandle = 0;
 				}
 				else {
@@ -224,9 +226,11 @@ namespace F4CW {
 		RE::TESObjectWEAP::InstanceData* result = nullptr;
 		RE::TBO_InstanceData* myInstanceData = nullptr;
 
+		myExtraDataList->extraRWLock.lock_read();
+
 		if (myExtraDataList)
 		{
-			RE::BSExtraData* myExtraData = myExtraDataList->GetByType(RE::EXTRA_DATA_TYPE::kInstanceData);
+			RE::BSExtraData* myExtraData = myExtraDataList->HasType<RE::ExtraInstanceData>() ? myExtraDataList->GetByType<RE::ExtraInstanceData>() : nullptr;
 
 			if (myExtraData)
 			{
@@ -237,6 +241,8 @@ namespace F4CW {
 				}
 			}
 		}
+
+		myExtraDataList->extraRWLock.unlock_read();
 		if (!myInstanceData)
 			return nullptr;
 
@@ -248,10 +254,10 @@ namespace F4CW {
 	{
 		RE::TESObjectARMO::InstanceData* result = nullptr;
 		RE::TBO_InstanceData* myInstanceData = nullptr;
-
+		myExtraDataList->extraRWLock.lock_read();
 		if (myExtraDataList)
 		{
-			RE::BSExtraData* myExtraData = myExtraDataList->GetByType(RE::EXTRA_DATA_TYPE::kInstanceData);
+			RE::BSExtraData* myExtraData = myExtraDataList->HasType<RE::ExtraInstanceData>() ? myExtraDataList->GetByType<RE::ExtraInstanceData>() : nullptr;
 
 			if (myExtraData)
 			{
@@ -262,6 +268,7 @@ namespace F4CW {
 				}
 			}
 		}
+		myExtraDataList->extraRWLock.unlock_read();
 		if (!myInstanceData)
 			return nullptr;
 
@@ -331,7 +338,9 @@ namespace F4CW {
 	}
 
 	void SetWeaponConditionPercent(ItemDegradation::WeaponConditionData Data, float Value)
-	{}
+	{
+		Data.extraData->SetHealthPerc(Value);
+	}
 
 	void SetWeaponConditionPercent(RE::TESObjectREFR * refr, float Value)
 	{
@@ -420,7 +429,7 @@ namespace F4CW {
 
 	void InitializeWeaponCondition(ItemDegradation::WeaponConditionData myConditionData)
 	{
-		
+		myConditionData.extraData->SetHealthPerc(RE::BSRandom::Float(0.45f, 0.85f));
 	}
 	void InitializeWeaponCondition(RE::TESObjectREFR * myRef)
 	{
@@ -429,7 +438,10 @@ namespace F4CW {
 		InitializeWeaponCondition(ItemDegradation::WeaponConditionData(myRef));
 	}
 	void InitializeArmorCondition(ItemDegradation::ArmorConditionData myConditionData)
-	{}
+	{
+		myConditionData.extraData->SetHealthPerc(RE::BSRandom::Float(0.45f, 0.85f));
+	}
+
 	void InitializeArmorCondition(RE::TESObjectREFR * myRef)
 	{
 		if (!myRef)
@@ -551,7 +563,11 @@ void F4CW::ItemDegradation::DefineItemDegradationFormsFromGame()
 	bIgnoreMaxSkillsPlayer = GetPrivateProfileInt("Skills", "bIgnoreMaxSkillsPlayer", 0, myINI.c_str());
 
 
-	LOG_INFO("Item degradation forms fetched.");
+	LOG_INFO("Item degradation forms fetched. Initializing weapon conditions...");
+
+	InitializeWeaponConditionMappings(dataHandler);
+
+	LOG_INFO("Weapon conditions initialized.");
 }
 
 float F4CW::ItemDegradation::GetDegradationMapping(RE::TESAmmo* AmmoToCheck)
@@ -568,6 +584,259 @@ float F4CW::ItemDegradation::GetDegradationMapping(RE::TESAmmo* AmmoToCheck)
 float F4CW::ItemDegradation::GetDefaultAmmoDegradation()
 {
 	return CWGlobals.AmmoDefaultDegradation ? CWGlobals.AmmoDefaultDegradation->GetValue() : 0.01f;
+}
+
+F4CW::ItemDegradation::CWWeaponConditionInfo F4CW::ItemDegradation::GetCWWeaponConditionInfo(RE::TESObjectWEAP* weaponRef)
+{
+	if (!weaponRef)
+		return CWWeaponConditionInfo();
+
+	auto res = WeaponConditionMapping.find(weaponRef);
+	if (res == WeaponConditionMapping.end())
+		return CWWeaponConditionInfo();
+
+	return res->second;
+}
+
+void F4CW::ItemDegradation::InitializeWeaponConditionMappings(RE::TESDataHandler* dataHandler)
+{
+	auto w = GET_WEAPON_BY_ID(dataHandler, 0x065B72, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Pool Cue
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B73, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Power Fist
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06DFA2, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Railway Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B74, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Ripper
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06DFA3, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Rock-It Launcher
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B75, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Rolling Pin
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06DFA0, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Shishkebab
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B77, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Combat Shotgun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065CCA, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Sawed-Off Shotgun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B78, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Sledgehammer
+	w = GET_WEAPON_BY_ID(dataHandler, 0x014904, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Sniper Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06598F, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Spiked Knuckles
+	w = GET_WEAPON_BY_ID(dataHandler, 0x02C83F, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Super Sledge
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B79, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Switchblade
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B7A, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Tire Iron
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06C577, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // A3-21's Plasma Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D7EB7, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Ant's Sting
+	w = GET_WEAPON_BY_ID(dataHandler, 0x1B8FEB, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Blackhawk
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D624, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Board of Education
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D7EB5, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Burnmaster
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D623, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Clover's Cleaver
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0748BA, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Col. Autumn's 10mm
+	w = GET_WEAPON_BY_ID(dataHandler, 0x05CC53, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fawkes' Super Sledge
+	w = GET_WEAPON_BY_ID(dataHandler, 0x07ECC4, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Firelance
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D62A, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Highwayman's Friend
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D621, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Jack
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D61D, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Plunkett's Valid Points
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0530FC, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // The Kneecapper
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D61E, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Occam's Razor
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D7EB4, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Experimental MIRV
+	w = GET_WEAPON_BY_ID(dataHandler, 0x1DCC20, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Eugene
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00175C, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Ol' Painless
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D61A, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fisto!
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D26E1, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Protectron's Gaze
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0149B5, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Reservist's Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x080DBD, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Smuggler's End
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0A00B0, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Stabhappy
+	w = GET_WEAPON_BY_ID(dataHandler, 0x014825, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Sydney's 10mm "Ultra" SMG
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D26DF, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // The Terrible Shotgun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00D620, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Vampire's Edge
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D7EB6, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Vengeance
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0149B3, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Victory Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0BA944, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Wanda
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D26DC, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Xuanlong Assault Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x1BD475, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Zhu-Rong v418 Chinese Pistol
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DC8E7, "Fallout4.esm");
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Deliverer
+
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0615AF, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Mesmetron (Bot Laser Gun Left)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x061598, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Mesmetron (Robobrain Head)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06221C, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Spit Attack
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0AADBA, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Auto Axe
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065BE0, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Super Sledge (Classic)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x08CF0A, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Radioactive Gore
+	w = GET_WEAPON_BY_ID(dataHandler, 0x080DE0, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // 10mm (Butch)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x084319, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Combat Knife (Charon)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x084318, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Combat Shotgun (Charon)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x084340, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Combat Shotgun (Charon Scene)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x080ECB, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Laser Pistol (Cross)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x05CBBA, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Gatling Laser (Fawkes)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x05CB8A, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Sledgehammer (Fawkes)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x048C2B, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Chinese Assault Rifle (Jericho)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x080DD2, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Nail Board (Jericho)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0B3957, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Pincher (Left)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0B3956, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Pincher (Middle)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0B3958, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Pincher (Right)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x03C9B4, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fat Man (MQ01)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x04D2DE, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Rolling Pin (MQ04)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x04D289, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Slasher Knife (MQ04)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x02C773, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Repellent Stick
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0CC051, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Protectron Head Laser
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0CC053, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Protectron Left Arm Laser
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0CC052, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Protectron Right Arm Laser
+	w = GET_WEAPON_BY_ID(dataHandler, 0x07F8BF, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Unarmed Centaur
+	w = GET_WEAPON_BY_ID(dataHandler, 0x07E680, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Unarmed Ant
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D4964, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Unarmed Giant Ant
+	w = GET_WEAPON_BY_ID(dataHandler, 0x061596, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Unarmed RoboBrain
+	w = GET_WEAPON_BY_ID(dataHandler, 0x074880, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // 10mm
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D26E6, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // (100% CND) 10mm
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDAE8, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // 10mm (No Jam After Reload)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0748B9, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // 10mm (Silenced)
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00DDC9, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // 10mm Submachine Gun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x04FFA5, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // .32 Pistol
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B76, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // .44 Magnum
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D26E0, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Alien Blaster
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0147C9, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Assault Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B5D, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Baseball Bat
+	w = GET_WEAPON_BY_ID(dataHandler, 0x04E034, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // BB Gun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0CC8A7, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Brass Knuckles
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0160C4, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Chinese Assault Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B5F, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Chinese Officer Sword
+	w = GET_WEAPON_BY_ID(dataHandler, 0x1B4899, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Chinese Pistol
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0148B1, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Dart Gun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x06DFA1, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Deathclaw Gauntlet
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0B39B7, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Eyebot
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B61, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fat Man
+	w = GET_WEAPON_BY_ID(dataHandler, 0x07E65F, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fire Ant Flamer 01
+	w = GET_WEAPON_BY_ID(dataHandler, 0x07E660, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fire Ant Flamer 02
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B63, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Flamer
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B69, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Gatling Laser
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0D4966, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Fire Breathing Attack
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDE92, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Frag Grenade
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDE9A, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Plasma Grenade
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDE96, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Pulse Grenade
+	w = GET_WEAPON_BY_ID(dataHandler, 0x001737, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Hunting Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0155D0, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Knife
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B6C, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Combat Knife
+	w = GET_WEAPON_BY_ID(dataHandler, 0x050BDF, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Laser Pistol
+	w = GET_WEAPON_BY_ID(dataHandler, 0x00E3FD, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Laser Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B6D, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Lead Pipe
+	w = GET_WEAPON_BY_ID(dataHandler, 0x04B898, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Mesmetron
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDE94, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Frag Mine
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDE9C, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Plasma Mine
+	w = GET_WEAPON_BY_ID(dataHandler, 0x0DDE98, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Pulse Mine
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B6E, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Minigun
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B6F, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Missile Launcher
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B70, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Nail Board
+	w = GET_WEAPON_BY_ID(dataHandler, 0x05B153, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Plasma Pistol
+	w = GET_WEAPON_BY_ID(dataHandler, 0x05B155, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Plasma Rifle
+	w = GET_WEAPON_BY_ID(dataHandler, 0x065B71, MOD_ESM);
+	WeaponConditionMapping[w] = CWWeaponConditionInfo(w->weaponData.attackDelaySec, w->weaponData.attackSeconds); // Police Baton
 }
 
 bool F4CW::ItemDegradation::RegisterDegradationFunctions(RE::BSScript::IVirtualMachine* vm)
@@ -649,6 +918,7 @@ void F4CW::DegradationPapyrus::ModEquippedWeaponConditionPercentage_Papyrus(std:
 	LOG_INFO("ModEquippedWeaponConditionPercentage called from Papyrus");
 
 	ItemDegradation::WeaponConditionData actorData(myActor);
+	RE::TESObjectWEAP* weaponObject = static_cast<RE::TESObjectWEAP*>(actorData.Form);
 
 	auto &weapon = myActor->currentProcess->middleHigh->equippedItems[0];
 
@@ -664,6 +934,15 @@ void F4CW::DegradationPapyrus::ModEquippedWeaponConditionPercentage_Papyrus(std:
 	{
 		percentageIncrease = 1.0;
 	}
+
+
+	percentageIncrease = max(percentageIncrease, 0.0f);
+	if (percentageIncrease == 0.0f) {
+		// Weapon breaks.
+		RE::ActorEquipManager::GetSingleton()->UnequipItem(myActor, &weapon, false);
+		RE::GameSettingCollection* gameSettingCollection = RE::GameSettingCollection::GetSingleton();
+		RE::SendHUDMessage::ShowHUDMessage(gameSettingCollection->GetSetting("sWeaponBreak")->GetString().data(), "00DCUIWeaponBreak", true, true);
+	}
 	else if (percentageIncrease <= 0.0)
 	{
 		percentageIncrease = 0.0;
@@ -673,8 +952,12 @@ void F4CW::DegradationPapyrus::ModEquippedWeaponConditionPercentage_Papyrus(std:
 		myActor->inventoryList->rwLock.lock_read();
 	}
 
+	weaponObject->weaponData.attackDelaySec = WPNUtilities::CalculateUpdatedRateOfFireValue(weaponObject, &weaponObject->weaponData, percentageIncrease);
+	actorData.extraData->SetHealthPerc(percentageIncrease);
+
+	RE::PipboyDataManager::GetSingleton()->inventoryData.RepopulateItemCardOnSection(RE::ENUM_FORM_ID::kWEAP);
+
 	LOG_INFO(std::format("Initial Condition = {}, New Condition = {}", percentageInitial, percentageIncrease));
-	SetWeaponConditionPercent(actorData, percentageIncrease);
 
 	// @TODO
 	// WPNUtilities::UpdateWeaponStats(actorData);
@@ -999,12 +1282,12 @@ float F4CW::WPNUtilities::GetWeaponDamage(ItemDegradation::WeaponConditionData m
 	//REX::WARN("Base Damage Type: Base Damage = %f, New Damage = %f", baseDamage, newDamage);
 }
 
-float F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, float currentCondition)
+double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, double currentCondition)
 {
-	return CalculateUpdatedRateOfFireValue(myConditionData.Form, currentCondition);
+	return CalculateUpdatedRateOfFireValue(myConditionData.Form, nullptr, currentCondition);
 }
 
-float F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, float currentCondition)
+double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, RE::TESObjectWEAP::InstanceData* weaponInstanceData, double currentCondition)
 {
 	using namespace ItemDegradation;
 	// the calculation here is a bit weird in FO4, Fire Rate is linked to attack delay, with attack delay, the lower it is the higher the Fire Rate
@@ -1012,52 +1295,84 @@ float F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponFor
 
 	RE::TESObjectWEAP* baseWPNForm = static_cast<RE::TESObjectWEAP*>(weaponForm);
 
-	float baseROF = baseWPNForm->weaponData.attackDelaySec;	//	unkC0 == fAttackSeconds;
+	if (!baseWPNForm->IsRangedWeapon() || baseWPNForm->weaponData.type == RE::WEAPON_TYPE::kGrenade || baseWPNForm->weaponData.type == RE::WEAPON_TYPE::kMine)
+		return -1.0f;
 
-	float result = baseROF;
+	auto baseROF = GetCWWeaponConditionInfo(baseWPNForm);	//	unkC0 == fAttackSeconds;
+	if (baseROF.BaseAttackDelay < 0) {
+		LOG_WARNING(std::format("Weapon '{}' is not in WeaponConditionMapping. Ignoring Rate of Fire change...", weaponForm->GetFormID()).c_str());
+		return -1.0f;
+	}
+
+	double result = 1.0f;
+
+	//if (baseROF == 0)
+		//baseROF = 0.1f;
 
 	//REX::WARN("%s: Base Attack Delay = %f", baseWPNForm->GetFullName(), baseROF);
-
+	
 	if (currentCondition <= 1.0 && currentCondition > 0.9)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire10->GetFloat());
+		result = fWeaponConditionRateOfFire10->GetFloat();
 	}
 	else if (currentCondition <= 0.9 && currentCondition > 0.8)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire9->GetFloat());
+		result = fWeaponConditionRateOfFire9->GetFloat();
 	}
 	else if (currentCondition <= 0.8 && currentCondition > 0.7)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire8->GetFloat());
+		result = fWeaponConditionRateOfFire8->GetFloat();
 	}
 	else if (currentCondition <= 0.7 && currentCondition > 0.6)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire7->GetFloat());
+		result = fWeaponConditionRateOfFire7->GetFloat();
 	}
 	else if (currentCondition <= 0.6 && currentCondition > 0.5)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire6->GetFloat());
+		result = fWeaponConditionRateOfFire6->GetFloat();
 	}
 	else if (currentCondition <= 0.5 && currentCondition > 0.4)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire5->GetFloat());
+		result = fWeaponConditionRateOfFire5->GetFloat();
 	}
 	else if (currentCondition <= 0.4 && currentCondition > 0.3)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire4->GetFloat());
+		result = fWeaponConditionRateOfFire4->GetFloat();
 	}
 	else if (currentCondition <= 0.3 && currentCondition > 0.2)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire3->GetFloat());
+		result = fWeaponConditionRateOfFire3->GetFloat();
 	}
 	else if (currentCondition <= 0.2 && currentCondition > 0.1)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire2->GetFloat());
+		result = fWeaponConditionRateOfFire2->GetFloat();
 	}
 	else if (currentCondition <= 0.1 && currentCondition > 0.0)
 	{
-		result = (baseROF / fWeaponConditionRateOfFire1->GetFloat());
+		result = fWeaponConditionRateOfFire1->GetFloat();
 	}
+	
+
+	//LOG_INFO(std::format("1: {} | 2: {}| 3: {}| 4: {}| 5: {}| 6: {}| 7: {}| 8: {}| 9: {}| 10: {}| ", fWeaponConditionRateOfFire1->GetFloat(), fWeaponConditionRateOfFire2->GetFloat(), fWeaponConditionRateOfFire3->GetFloat(), fWeaponConditionRateOfFire4->GetFloat(), fWeaponConditionRateOfFire5->GetFloat(),
+	//	fWeaponConditionRateOfFire6->GetFloat(), fWeaponConditionRateOfFire7->GetFloat(), fWeaponConditionRateOfFire8->GetFloat(), fWeaponConditionRateOfFire9->GetFloat(), fWeaponConditionRateOfFire10->GetFloat()).c_str());
+
+	// result = baseROF / result;
+	/*
+	if (baseWPNForm->weaponData.flags.underlying() & (std::uint32_t)RE::WEAPON_FLAGS::kAutomatic) {
+		weaponInstanceData->speed = result;
+		weaponInstanceData->attackSeconds = weaponInstanceData->attackDelaySec / result;
+		
+	}
+	else {
+		
+	}
+	*/
+	weaponInstanceData->attackDelaySec = baseROF.BaseAttackDelay / result;
+	baseWPNForm->weaponData.attackDelaySec = weaponInstanceData->attackDelaySec;
+	//baseWPNForm->weaponData.attackSeconds = weaponInstanceData->attackSeconds;
+	weaponInstanceData->speed = result;
+	baseWPNForm->weaponData.speed = weaponInstanceData->speed;
+	
 
 	//REX::WARN("%s: Updated Attack Delay = %f", baseWPNForm->GetFullName(), result);
 

@@ -39,6 +39,8 @@
 #include <RE/B/BGSTypedFormValuePair.h>
 #include <RE/B/BSTArray.h>
 #include <RE/B/BSTTuple.h>
+#include <RE/A/ActorUtils.h>
+#include <RE/E/ExtraHealth.h>
 
 namespace F4CW {
 	namespace Hooks {
@@ -58,7 +60,7 @@ namespace F4CW {
 			{
 				if (!traverse || !traverse->extra)
 					break;
-
+				bool willHaveHealth = false;
 				if (a_boundObject->GetFormType() == RE::ENUM_FORM_ID::kWEAP)
 				{
 					RE::TESObjectWEAP* tempREFR = static_cast<RE::TESObjectWEAP*>(a_boundObject);
@@ -67,6 +69,16 @@ namespace F4CW {
 						REX::DEBUG("BGSInventoryList::AddItem: REFR grenade/mine weapon type.");
 						break;
 					}
+					willHaveHealth = true;
+					
+					if (traverse->extra->GetHealthPerc() < 0.0f) {
+						LOG_TO_CONSOLE("Added weapon first time.\n");
+						const float cond = RE::BSRandom::Float(0.45f, 0.85f);
+						traverse->extra->SetHealthPerc(cond);
+
+						WPNUtilities::CalculateUpdatedRateOfFireValue(tempREFR, &tempREFR->weaponData, cond);
+					}
+					
 
 					// Set to '1.0' when initializing if the 'noDegradation' keyword is on the object.
 					if (tempREFR->HasKeyword(Shared::noDegradation))
@@ -80,11 +92,12 @@ namespace F4CW {
 				{
 					RE::TESObjectARMO* tempREFR = static_cast<RE::TESObjectARMO*>(a_boundObject);
 					// Set to '1.0' when initializing if the 'noDegradation' keyword is on the object.
-
+					
 					if (tempREFR->armorData.rating == 0 && !tempREFR->armorData.damageTypes)
 					{
 						break;
 					}
+					willHaveHealth = true;
 
 					if (tempREFR->HasKeyword(Shared::noDegradation))
 					{
@@ -94,12 +107,14 @@ namespace F4CW {
 				}
 
 				// GetHealthPerc returns -1.0 if it can't find the 'kHealth' type.
-				if (traverse->extra->GetHealthPerc() < 0.0f) {
+				if (willHaveHealth && traverse->extra->GetHealthPerc() < 0.0f) {
 					// Set health randomly
+					LOG_TO_CONSOLE(std::format("Added health to item '{}' added.", a_boundObject->GetFormEditorID()).c_str());
 					traverse->extra->SetHealthPerc(RE::BSRandom::Float(0.45f, 0.85f));
 					break;
 				}
-
+				
+				
 				iterCount++;
 				if (iterCount > traverse->count - 1)
 					break;
@@ -166,19 +181,34 @@ namespace F4CW {
 		typedef void(TESObjectWeaponFireSig)(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>*, RE::TESObjectREFR*, RE::BGSEquipIndex, RE::TESAmmo*, RE::AlchemyItem*);
 		REL::Relocation<TESObjectWeaponFireSig> TESObjectWeaponFireOriginal;
 		void Hook_TESObjectWeaponFire(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>* a_weapon, RE::TESObjectREFR* a_source, RE::BGSEquipIndex a_equipIndex, RE::TESAmmo* a_ammo, RE::AlchemyItem* a_poiso) {
-			TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
-			if (!a_source)
+
+			if (!a_source) {
+				TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
 				return;
+			}
+				
 
 			// Only apply Weapon Condition Change on Player.
 			RE::PlayerCharacter* playerCharacter = RE::PlayerCharacter::GetSingleton();
-			if (a_source != playerCharacter)
+			if (a_source != playerCharacter) {
+				TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
 				return;
+			}
 
-			if (playerCharacter->IsGodMode() || Shared::noWeaponDegradation)
+			if (playerCharacter->IsGodMode() || Shared::noWeaponDegradation) {
+				TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
 				return;
+			}
+
+			
+
+			// LOG_TO_CONSOLE("Shot weapon.\n");
+
+			//if (weaponObject)
+				//weaponObject->weaponData.attackDelaySec = WPNUtilities::CalculateUpdatedRateOfFireValue(weaponObject, a_weapon->instanceData);
 
 			RE::TESObjectWEAP* weaponObject = static_cast<RE::TESObjectWEAP*>(a_weapon->object);
+			
 
 			if (weaponObject->weaponData.type == RE::WEAPON_TYPE::kGrenade || weaponObject->weaponData.type == RE::WEAPON_TYPE::kMine
 				|| weaponObject->HasKeyword(Shared::noDegradation))
@@ -186,26 +216,32 @@ namespace F4CW {
 
 			// Getting the inventory form of the a_weapon
 			RE::BGSInventoryItem* inventoryItem = nullptr;
+			int index = 0;
 			RE::TESFormID weaponFormID = a_weapon->object->GetFormID();
 			for (RE::BGSInventoryItem& item : playerCharacter->inventoryList->data) {
 				if (item.object->GetFormID() == weaponFormID) {
 					inventoryItem = &item;
 					break;
 				}
+				index++;
 			}
-			if (!inventoryItem)
+			if (!inventoryItem) {
+				TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
 				return;
-
-			RE::EquippedItem& equippedItem = playerCharacter->currentProcess->middleHigh->equippedItems[0];
+			}
+				
 			RE::TESObjectWEAP::InstanceData* weaponInstanceData = static_cast<RE::TESObjectWEAP::InstanceData*>(a_weapon->instanceData.get());
+			
+			RE::EquippedItem& equippedItem = playerCharacter->currentProcess->middleHigh->equippedItems[0];
 
 			RE::TESAmmo* weaponAmmo = weaponInstanceData->ammo;
 
-			float degradationAmount = ItemDegradation::GetDegradationMapping(weaponAmmo);
+			double degradationAmount = ItemDegradation::GetDegradationMapping(weaponAmmo);
 			if (degradationAmount == 0.01f)
 				REX::WARN("TESObjectWEAP::Fire - degradation ammo mapping for ammo type '{}' is not declared in 'AmmoDegradationMap' defaulting to 0.01f", weaponAmmo->GetFormEditorID());
 
 			const std::uint32_t flags = weaponInstanceData->flags.underlying();
+
 			if (flags & (std::uint32_t)RE::WEAPON_FLAGS::kAutomatic)
 				degradationAmount *= Shared::fAutomaticWeaponConditionReduction->GetValue();
 			else if (flags & (std::uint32_t)RE::WEAPON_FLAGS::kBoltAction)
@@ -226,17 +262,28 @@ namespace F4CW {
 
 			RE::ExtraDataList* extraDataList = inventoryItem->stackData->extra.get();
 			
-			float currentWeaponHealth = max(extraDataList->GetHealthPerc() - degradationAmount, 0.0f);
+			double currentWeaponHealth = max(extraDataList->GetHealthPerc() - degradationAmount, 0.0f);
+			
+			
+			extraDataList->SetHealthPerc(currentWeaponHealth);
+
+			WPNUtilities::CalculateUpdatedRateOfFireValue(weaponObject, weaponInstanceData, currentWeaponHealth);
+			TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
+
 			if (currentWeaponHealth == 0.0f) {
 				// Weapon breaks.
 				RE::ActorEquipManager::GetSingleton()->UnequipItem(playerCharacter, &equippedItem, false);
 				RE::GameSettingCollection* gameSettingCollection = RE::GameSettingCollection::GetSingleton();
 				RE::SendHUDMessage::ShowHUDMessage(gameSettingCollection->GetSetting("sWeaponBreak")->GetString().data(), "00DCUIWeaponBreak", true, true);
 			}
-
-			extraDataList->SetHealthPerc(currentWeaponHealth);
-			weaponObject->weaponData.attackDelaySec = WPNUtilities::CalculateUpdatedRateOfFireValue(weaponObject, currentWeaponHealth);
 			RE::PipboyDataManager::GetSingleton()->inventoryData.RepopulateItemCardOnSection(RE::ENUM_FORM_ID::kWEAP);
+			if (weaponObject->weaponData.flags.underlying() & (std::uint32_t)RE::WEAPON_FLAGS::kAutomatic) {
+				LOG_TO_CONSOLE(std::format("Shot weapon {}. Cond: {}, New FireRate: {}, {}\n", weaponObject->GetFormEditorID(), currentWeaponHealth, weaponInstanceData->attackSeconds, weaponInstanceData->attackDelaySec).c_str());
+			}
+			else {
+				LOG_TO_CONSOLE(std::format("Shot weapon {}. Cond: {}, New FireRate: {}, {}\n", weaponObject->GetFormEditorID(), currentWeaponHealth, weaponInstanceData->attackDelaySec, weaponInstanceData->attackSeconds).c_str());
+			}
+				
 		}
 
 		DetourXS hook_CombatFormulasCalcTargetedLimbDamage;
@@ -252,8 +299,10 @@ namespace F4CW {
 			RE::ActorValueInfo* targetedLimbAV = a_bodyPart->data.actorValue;
 			const float DR_ForHitLimb = RE::ActorUtils::GetEquippedArmorDamageResistance(a_actor, targetedLimbAV);
 
-			if (DR_ForHitLimb >= a_physicalDamage)
+			if (DR_ForHitLimb >= a_physicalDamage) {
+				LOG_TO_CONSOLE(std::format("Armor not dmged. DR_ForHitLimb is more than damage. DR_ForHitLimb: {}, dmg: {}\n", DR_ForHitLimb, a_physicalDamage).c_str());
 				return retailDamage;
+			}
 
 			RE::BGSInventoryList* inventoryList = a_actor->inventoryList;
 			inventoryList->rwLock.lock_read();
@@ -265,11 +314,11 @@ namespace F4CW {
 				if (inventoryItem.object && armor->formType == RE::ENUM_FORM_ID::kARMO && armor->Protects(targetedLimbAV, false)) {
 					RE::ExtraDataList* armorExtraData = inventoryItem.stackData->extra.get();
 					// If armor does not have kHealth, it would return -1.
-					float armourHealth = armorExtraData->GetHealthPerc();
+					double armourHealth = armorExtraData->GetHealthPerc();
 
 					if (armourHealth > 0.0f) {
 						REX::DEBUG("Armor condition of '{}' before degradation: {}", armor->GetFormEditorID(), armourHealth);
-						const float degradationAmount = (a_physicalDamage - DR_ForHitLimb) / DR_ForHitLimb * Shared::fArmourConditionReductionPerPercentage->GetValue();
+						const double degradationAmount = (a_physicalDamage - DR_ForHitLimb) / DR_ForHitLimb * Shared::fArmourConditionReductionPerPercentage->GetValue();
 						armourHealth = max(armourHealth - degradationAmount, 0.0f);
 
 						if (armourHealth == 0.0f) {
@@ -283,13 +332,45 @@ namespace F4CW {
 							RE::SendHUDMessage::ShowHUDMessage(RE::GameSettingCollection::GetSingleton()->GetSetting("sWeaponBreak")->GetString().data(), "00DCUIWeaponBreak", true, true);
 						}
 
-						REX::DEBUG("Armor condition of '{}' after degradation: {}", armor->GetFormEditorID(), armourHealth);
+						armorExtraData->SetHealthPerc(armourHealth);
+
+						LOG_TO_CONSOLE(std::format("Armor condition of '{}' after degradation: {}. degradationAmount: {}\n", armor->GetFormEditorID(), armourHealth, degradationAmount).c_str());
+						REX::DEBUG("Armor condition of '{}' after degradation: {}. degradationAmount: {}", armor->GetFormEditorID(), armorExtraData->GetHealthPerc(), degradationAmount);
 					}
 					break;
 				}
 			}
 			inventoryList->rwLock.unlock_read();
 			return retailDamage;
+		}
+
+
+		DetourXS hook_SetHealthPerc;
+		typedef void(SetHealthPercSig)(RE::ExtraDataList*, float);
+		REL::Relocation<SetHealthPercSig> SetHealthPercOriginal;
+		// Required to allow the game to store a value of 1.0, by default it would set it to '-1.0'
+		// This causes issues in the way we handle initialization of the health data.
+		// Here we simply, run the original function, then if 'a_health' was '1.0', we manually set it 
+		// again to '1.0', reverting the original functions result of '-1.0'.
+		void Hook_ExtraDataListSetHealthPerc(RE::ExtraDataList* a_this, float a_health)
+		{
+			SetHealthPercOriginal(a_this, a_health);
+			if (a_health == 1.0f && a_this->GetHealthPerc() != 1.0f)
+			{
+				a_this->AddExtra(new RE::ExtraHealth(1.0f));
+			}
+		}
+
+		DetourXS hook_GetWeaponDisplayRateOfFire;
+		typedef float(GetWeaponDisplayRateOfFireSig)(const RE::TESObjectWEAP&, const RE::TESObjectWEAP::InstanceData*);
+		REL::Relocation<GetWeaponDisplayRateOfFireSig> GetWeaponDisplayRateOfFireOriginal;
+		float Hook_GetWeaponDisplayRateOfFire(const RE::TESObjectWEAP& a_weapon, const RE::TESObjectWEAP::InstanceData* a_data)
+		{
+			// float original = GetWeaponDisplayRateOfFireOriginal(a_weapon, a_data);
+
+			// LOG_TO_CONSOLE(std::format("Original FireRate: {}, Attack Delay: {}", original, a_data->attackDelaySec).c_str());
+
+			return a_data->attackDelaySec;
 		}
 
 		
@@ -301,7 +382,9 @@ namespace F4CW {
 				RegisterDetourFunction(hook_GetEquippedDamageResistance, RE::ID::ActorUtils::GetEquippedArmorDamageResistance, &Hook_GetEquippedDamageResistance, GetEquippedDamageResistanceOriginal, "GetEquippedArmorDamageResistance");
 				RegisterDetourFunction(hook_TESObjectWeaponFire, RE::ID::TESObjectWEAP::Fire, &Hook_TESObjectWeaponFire, TESObjectWeaponFireOriginal, "TESObjectWeaponFire");
 				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &Hook_CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
-
+				RegisterDetourFunction(hook_SetHealthPerc, RE::ID::ExtraDataList::SetHealthPerc, &Hook_ExtraDataListSetHealthPerc, SetHealthPercOriginal, "SetHealthPerc");
+				
+				RegisterDetourFunction(hook_GetWeaponDisplayRateOfFire, RE::ID::CombatFormulas::GetWeaponDisplayRateOfFire, &Hook_GetWeaponDisplayRateOfFire, GetWeaponDisplayRateOfFireOriginal, "GetWeaponDisplayRateOfFire");
 			}
 
 			void Install()

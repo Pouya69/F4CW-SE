@@ -30,8 +30,8 @@ namespace Shared {
 
 	void InitializeSharedForms(RE::TESDataHandler* dataHandler)
 	{
-		crWeaponRanged = dataHandler->LookupForm<RE::BGSKeyword>(0x0DEDC5, "Fallout4.esm");
-		noDegradation = dataHandler->LookupForm<RE::BGSKeyword>(0x189348, MOD_ESM);
+		crWeaponRanged = dataHandler->LookupForm<RE::BGSKeyword>(0x189348, "Fallout4.esm");
+		noDegradation = dataHandler->LookupForm<RE::BGSKeyword>(0x0DEDC5, MOD_ESM);
 
 		fAutomaticWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x000D18, CURRENT_ESP);
 		fBoltWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x000D19, CURRENT_ESP);

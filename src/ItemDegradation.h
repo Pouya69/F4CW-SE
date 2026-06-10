@@ -26,6 +26,31 @@ namespace F4CW {
 
 		extern std::unordered_map<RE::TESAmmo*, float> AmmoDegradationMap;
 
+		struct CWWeaponConditionInfo {
+			CWWeaponConditionInfo() {
+				BaseAttackDelay = -1.0f;
+				BaseAttackSeconds = -1.0f;
+			}
+
+			CWWeaponConditionInfo(float baseAttackDelay, float baseAttackSeconds) {
+				BaseAttackDelay = baseAttackDelay;
+				BaseAttackSeconds = baseAttackSeconds;
+			}
+			float BaseAttackSeconds;
+			float BaseAttackDelay;
+		};
+
+		extern std::unordered_map<RE::TESObjectWEAP*, CWWeaponConditionInfo> WeaponConditionMapping;
+
+		CWWeaponConditionInfo GetCWWeaponConditionInfo(RE::TESObjectWEAP* weaponRef);
+
+
+		void InitializeWeaponConditionMappings(RE::TESDataHandler* dataHandler);
+
+		#define GET_WEAPON_BY_ID(dataHandler, weaponID, MOD_ESM) dataHandler->LookupForm<RE::TESObjectWEAP>(weaponID, MOD_ESM)
+
+		
+
 		bool RegisterDegradationFunctions(RE::BSScript::IVirtualMachine* vm);
 
 		//	Weapon Condition Struct
@@ -117,8 +142,8 @@ namespace F4CW {
 		float CalculateUpdatedDamageValue(float baseDamage, float minimum, float conditionPercent, float skillBonus);
 		// void UpdateWeaponStats(ItemDegradation::WeaponConditionData myConditionData);
 		float GetWeaponDamage(ItemDegradation::WeaponConditionData myConditionData);
-		float CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, float currentCondition);
-		float CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, float currentCondition);
+		double CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, double currentCondition);
+		double CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, RE::TESObjectWEAP::InstanceData* weaponInstanceData, double currentCondition);
 		/*
 		RE::TESForm* GetEquippedWeaponForm(RE::Actor* actor);
 		std::uint64_t GetEquippedWeaponHandleID(RE::Actor* actor);

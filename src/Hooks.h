@@ -26,10 +26,10 @@ namespace F4CW {
 		namespace Registers {
 
 			template<typename T>
-			static void RegisterDetourFunction(DetourXS detour, const REL::ID functionID, const LPVOID detourFunctionAddress, REL::Relocation<T> &OriginalFunction, std::string_view functionName) {
+			static void RegisterDetourFunction(DetourXS& detour, const REL::ID functionID, const LPVOID& detourFunctionAddress, REL::Relocation<T> &OriginalFunction, std::string_view functionName) {
 				REL::Relocation<T> functionLocation{ functionID };
 				if (detour.Create(reinterpret_cast<void*>(functionLocation.address()), detourFunctionAddress)) {
-					LOG_INFO(std::format("Installed '{}' hook", detourFunctionAddress));
+					LOG_INFO(std::format("Installed '{}' hook", functionName));
 					OriginalFunction = reinterpret_cast<uintptr_t>(detour.GetTrampoline());
 				}
 				else {
@@ -49,7 +49,8 @@ namespace F4CW {
 		float Hook_GetEquippedDamageResistance(RE::Actor* a_actor, const RE::ActorValueInfo* a_info);
 		void Hook_TESObjectWeaponFire(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>* a_weapon, RE::TESObjectREFR* a_source, RE::BGSEquipIndex a_equipIndex, RE::TESAmmo* a_ammo, RE::AlchemyItem* a_poiso);
 		float Hook_CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes);
-		
+		void Hook_ExtraDataListSetHealthPerc(RE::ExtraDataList* a_this, float a_health);
+		float Hook_GetWeaponDisplayRateOfFire(const RE::TESObjectWEAP& a_weapon, const RE::TESObjectWEAP::InstanceData* a_data);
 
 	}
 }

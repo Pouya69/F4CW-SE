@@ -21,14 +21,14 @@
 
 namespace Skills {
 	std::vector<RE::ActorValueInfo*> SkillsList;
-	std::unordered_map<std::string, RE::ActorValueInfo*> strSkillMap;
+	std::unordered_map<std::string, RE::ActorValueInfo*> strSkillMap = std::unordered_map<std::string, RE::ActorValueInfo*>();
 
-	std::unordered_map<const RE::ActorValueInfo*, std::vector<RE::ActorValueInfo*>> skillsToSpecialMap;
-	std::unordered_map<const RE::ActorValueInfo*, std::vector<RE::ActorValueInfo*>> specialToSkillsMap;
+	std::unordered_map<const RE::ActorValueInfo*, std::vector<RE::ActorValueInfo*>> skillsToSpecialMap = std::unordered_map<const RE::ActorValueInfo*, std::vector<RE::ActorValueInfo*>>();
+	std::unordered_map<const RE::ActorValueInfo*, std::vector<RE::ActorValueInfo*>> specialToSkillsMap = std::unordered_map<const RE::ActorValueInfo*, std::vector<RE::ActorValueInfo*>>();
 
-	std::unordered_map<std::string, RE::ActorValueInfo*> PerksMap;
+	std::unordered_map<std::string, RE::ActorValueInfo*> PerksMap = std::unordered_map<std::string, RE::ActorValueInfo*>();
 
-	std::vector<RE::BGSPerk*> CWNPCPerksList;
+	std::vector<RE::BGSPerk*> CWNPCPerksList = std::vector<RE::BGSPerk*>();
 }
 
 // VanillaAV_Struct VanillaActorValues;
@@ -279,6 +279,8 @@ void Skills::RegisterForSkillLink()
 	strSkillMap.emplace("Speech", CW_Skills.Speech);
 	strSkillMap.emplace("Unarmed", CW_Skills.Unarmed);
 
+	
+
 }
 
 
@@ -289,11 +291,20 @@ float Skills::CalculateSkillOffset(const RE::ActorValueOwner* a_actor, const RE:
 
 
 	//	(Dependant x 2) + 2 + (Dependant_02 / 2)
-	auto dependants = *GetDependantAVs(&a_info);
+	auto& dependants = *GetDependantAVs(&a_info);
+
+	float dep1 = a_actor->GetActorValue(*dependants[0]);
+
+	float dep2 = a_actor->GetActorValue(*VanillaActorValues.Luck);
+
+
+	return (dep1 * 2) + 2 + ceilf(dep2 / 2);
+	/*
 	if (dependants.size() == 1)
 		return (a_actor->GetActorValue(*dependants[0]) * 2) + 2 + ceilf(a_actor->GetActorValue(*VanillaActorValues.Luck) / 2);
 	else
 		return (a_actor->GetActorValue(*dependants[0]) * 2) + 2 + ceilf(a_actor->GetActorValue(*dependants[1]) / 2);
+	*/
 }
 
 void Skills::RegisterLinkedAV(RE::ActorValueInfo* AV, RE::ActorValueInfo::DerivationFunction_t* CalcFunction, RE::ActorValueInfo* linkedToSPECIAL, RE::ActorValueInfo* linkedToSPECIAL_02)
@@ -304,7 +315,8 @@ void Skills::RegisterLinkedAV(RE::ActorValueInfo* AV, RE::ActorValueInfo::Deriva
 	skillsToSpecialMap[AV].push_back(linkedToSPECIAL);
 	skillsToSpecialMap[AV].push_back(linkedToSPECIAL_02);
 
-	AV->derivationFunction = CalcFunction;
+	// @TODO
+	// AV->derivationFunction = CalcFunction;
 	//AV->VTABLE
 }
 
