@@ -1,6 +1,8 @@
 # Capital Wasteland Script Extender
 
-This is a basic plugin template using CommonLibF4.
+This is the Script Extender Plugin for Capital Wasteland using CommonLibF4. Thanks to [FlenarnDev]([url](https://github.com/FlenarnDev)) for his mentorship on my way of learning Script Extender and reverse engineering.
+The code is a combination of Baden Gill's previous iterations on the project, as well as new features.
+This is a WIP.
 
 ### Requirements
 * [XMake](https://xmake.io) [3.0.0+]
