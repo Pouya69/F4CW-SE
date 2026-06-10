@@ -327,9 +327,7 @@ namespace F4CW {
 							inventoryList->rwLock.unlock_read();
 							RE::ActorEquipManager::GetSingleton()->UnequipObject(a_actor, armorInstance, 1, armor->equipSlot, 0, false, false, true, true, nullptr);
 							inventoryList->rwLock.lock_read();
-
-							// For now. No idea how Frenarn's code works for $CAS_ArmorBreak
-							RE::SendHUDMessage::ShowHUDMessage(RE::GameSettingCollection::GetSingleton()->GetSetting("sWeaponBreak")->GetString().data(), "00DCUIWeaponBreak", true, true);
+							RE::SendHUDMessage::ShowHUDMessage(a_actor == playerCharacter ? "$F4CW_ArmorBroken" : std::format("You broke {}'s armor!", a_actor->GetDisplayFullName()).c_str(), "00DCUIWeaponBreak", true, true);
 						}
 
 						armorExtraData->SetHealthPerc(armourHealth);
