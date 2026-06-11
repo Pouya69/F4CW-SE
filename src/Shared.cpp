@@ -33,10 +33,10 @@ namespace Shared {
 		crWeaponRanged = dataHandler->LookupForm<RE::BGSKeyword>(0x189348, "Fallout4.esm");
 		noDegradation = dataHandler->LookupForm<RE::BGSKeyword>(0x0DEDC5, MOD_ESM);
 
-		fAutomaticWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x000D18, CURRENT_ESP);
-		fBoltWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x000D19, CURRENT_ESP);
+		fAutomaticWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x0E09D6, MOD_ESM);
+		fBoltWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x0E09D7, MOD_ESM);
 
-		fArmourConditionReductionPerPercentage = dataHandler->LookupForm<RE::TESGlobal>(0x000D1A, CURRENT_ESP);
+		fArmourConditionReductionPerPercentage = dataHandler->LookupForm<RE::TESGlobal>(0x0E09D8, MOD_ESM);
 	}
 
 }
