@@ -136,7 +136,7 @@ namespace F4CW {
 
 	namespace WPNUtilities
 	{
-		void UpdateHUDCondition(ItemDegradation::WeaponConditionData myConditionData);
+		bool UpdateHUDCondition(ItemDegradation::WeaponConditionData myConditionData);
 		// void AddItemHealthPercent(RE::TESForm* form, RE::TESObjectREFR* containerRef, float health);
 		float CalculateSkillBonusFromActor(ItemDegradation::WeaponConditionData myConditionData);
 		float CalculateUpdatedDamageValue(float baseDamage, float minimum, float conditionPercent, float skillBonus);

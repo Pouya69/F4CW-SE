@@ -11,7 +11,6 @@
 #include <RE/B/BSRandom.h>
 #include <RE/E/ENUM_FORM_ID.h>
 #include "Shared.h"
-#include <Windows.h>
 #include <RE/T/TESAmmo.h>
 #include <RE/T/TESForm.h>
 #include <RE/T/TESObjectARMO.h>
@@ -269,6 +268,8 @@ namespace F4CW {
 
 			WPNUtilities::CalculateUpdatedRateOfFireValue(weaponObject, weaponInstanceData, currentWeaponHealth);
 			TESObjectWeaponFireOriginal(a_weapon, a_source, a_equipIndex, a_ammo, a_poiso);
+			const bool didUpdate = WPNUtilities::UpdateHUDCondition(ItemDegradation::WeaponConditionData(weaponObject, extraDataList));
+			
 
 			if (currentWeaponHealth == 0.0f) {
 				// Weapon breaks.
@@ -327,7 +328,13 @@ namespace F4CW {
 							inventoryList->rwLock.unlock_read();
 							RE::ActorEquipManager::GetSingleton()->UnequipObject(a_actor, armorInstance, 1, armor->equipSlot, 0, false, false, true, true, nullptr);
 							inventoryList->rwLock.lock_read();
-							RE::SendHUDMessage::ShowHUDMessage(a_actor == playerCharacter ? "$F4CW_ArmorBroken" : std::format("You broke {}'s armor!", a_actor->GetDisplayFullName()).c_str(), "00DCUIWeaponBreak", true, true);
+							if (a_actor == playerCharacter) {
+								RE::SendHUDMessage::ShowHUDMessage("$F4CW_ArmorBroken", "00DCUIWeaponBreak", true, true);
+								RE::PipboyDataManager::GetSingleton()->inventoryData.RepopulateItemCardOnSection(RE::ENUM_FORM_ID::kARMO);
+							}
+							else {
+								RE::SendHUDMessage::ShowHUDMessage(std::format("You broke {}'s armor!", a_actor->GetDisplayFullName()).c_str(), "00DCUIWeaponBreak", true, true);
+							}
 						}
 
 						armorExtraData->SetHealthPerc(armourHealth);
@@ -371,6 +378,73 @@ namespace F4CW {
 			return a_data->attackDelaySec;
 		}
 
+		DetourXS hook_EquipObject;
+		typedef bool(EquipObjectSig)(RE::ActorEquipManager*, RE::Actor*, const RE::BGSObjectInstance&, std::uint32_t, std::uint32_t, const RE::BGSEquipSlot*, bool, bool, bool, bool, bool);
+		REL::Relocation<EquipObjectSig> EquipObjectOriginal;
+		bool Hook_EquipObject(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, const RE::BGSObjectInstance& a_object, std::uint32_t a_stackID, std::uint32_t a_number, const RE::BGSEquipSlot* a_slot, bool a_queueEquip, bool a_forceEquip, bool a_playSounds, bool a_applyNow, bool a_locked)
+		{
+			const bool retailEquipObject = EquipObjectOriginal(a_actorEquipManager, a_actor, a_object, a_stackID, a_number, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow, a_locked);
+
+			auto player = RE::PlayerCharacter::GetSingleton();
+			if (!player && a_actor != player || !a_object.object)
+				return retailEquipObject;
+
+			RE::TESObjectWEAP* weaponObject = static_cast<RE::TESObjectWEAP*>(a_object.object);
+			if (!weaponObject)
+				return retailEquipObject;
+
+			REX::DEBUG("EQUIPPING HOOKING...");
+
+			auto weaponConditionData = ItemDegradation::WeaponConditionData(a_actor);
+			if (weaponConditionData.extraData)
+				F4CW::WPNUtilities::UpdateHUDCondition(weaponConditionData);
+
+
+			return retailEquipObject;
+		}
+
+
+		DetourXS hook_HandleItemEquip;
+		typedef void(HandleItemEquipSig)(RE::Actor*, bool);
+		REL::Relocation<HandleItemEquipSig> HandleItemEquipOriginal;
+		void Hook_HandleItemEquip(RE::Actor* a_this, bool bCullBone)
+		{
+			HandleItemEquipOriginal(a_this, bCullBone);
+
+			auto player = RE::PlayerCharacter::GetSingleton();
+			if (a_this != player)
+				return;
+
+			REX::DEBUG("EQUIPPING HOOKING...");
+
+			auto weaponConditionData = ItemDegradation::WeaponConditionData(a_this);
+			if (weaponConditionData.extraData)
+				F4CW::WPNUtilities::UpdateHUDCondition(weaponConditionData);
+		}
+
+		DetourXS hook_OnPipboyClosed;
+		typedef void(OnPipboyClosedSig)(RE::PipboyManager*);
+		REL::Relocation<OnPipboyClosedSig> OnPipboyClosedOriginal;
+		void Hook_OnPipboyClosed(RE::PipboyManager* a_pipboyManager)
+		{
+			OnPipboyClosedOriginal(a_pipboyManager);
+			auto weaponConditionData = ItemDegradation::WeaponConditionData(RE::PlayerCharacter::GetSingleton());
+			if (weaponConditionData.extraData && weaponConditionData.Form)
+				F4CW::WPNUtilities::UpdateHUDCondition(weaponConditionData);
+
+		}
+
+		DetourXS hook_SetCurrentAmmoCount;
+		typedef void(SetCurrentAmmoCountSig)(RE::Actor*, RE::BGSEquipIndex, std::uint32_t);
+		REL::Relocation<SetCurrentAmmoCountSig> SetCurrentAmmoCountOriginal;
+		void Hook_SetCurrentAmmoCount(RE::Actor* a_this, RE::BGSEquipIndex a_equipIndex, std::uint32_t a_count)
+		{
+			SetCurrentAmmoCountOriginal(a_this, a_equipIndex, a_count);
+			auto weaponConditionData = ItemDegradation::WeaponConditionData(RE::PlayerCharacter::GetSingleton());
+			F4CW::WPNUtilities::UpdateHUDCondition(weaponConditionData);
+
+		}
+
 		
 		
 		namespace Registers {
@@ -381,8 +455,11 @@ namespace F4CW {
 				RegisterDetourFunction(hook_TESObjectWeaponFire, RE::ID::TESObjectWEAP::Fire, &Hook_TESObjectWeaponFire, TESObjectWeaponFireOriginal, "TESObjectWeaponFire");
 				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &Hook_CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
 				RegisterDetourFunction(hook_SetHealthPerc, RE::ID::ExtraDataList::SetHealthPerc, &Hook_ExtraDataListSetHealthPerc, SetHealthPercOriginal, "SetHealthPerc");
-				
+				// RegisterDetourFunction(hook_EquipObject, RE::ID::ActorEquipManager::EquipObject, &Hook_EquipObject, EquipObjectOriginal, "EquipObject");
 				// RegisterDetourFunction(hook_GetWeaponDisplayRateOfFire, RE::ID::CombatFormulas::GetWeaponDisplayRateOfFire, &Hook_GetWeaponDisplayRateOfFire, GetWeaponDisplayRateOfFireOriginal, "GetWeaponDisplayRateOfFire");
+				// RegisterDetourFunction(hook_HandleItemEquip, RE::ID::Actor::HandleItemEquip, &Hook_HandleItemEquip, HandleItemEquipOriginal, "HandleItemEquipItem");
+				// RegisterDetourFunction(hook_OnPipboyClosed, RE::ID::PipboyManager::OnPipboyClosed, &Hook_OnPipboyClosed, OnPipboyClosedOriginal, "OnPipboyClosed");
+				// RegisterDetourFunction(hook_SetCurrentAmmoCount, RE::ID::Actor::SetCurrentAmmoCount, &Hook_SetCurrentAmmoCount, SetCurrentAmmoCountOriginal, "SetCurrentAmmoCount");
 			}
 
 			void Install()

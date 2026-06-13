@@ -28,8 +28,8 @@
 #include <variant>
 #include <RE/B/BSFixedString.h>
 #include <RE/I/IMenu.h>
-#include <Scaleform/G/GFx_Movie.h>
-#include <Scaleform/G/GFx_Value.h>
+// #include <Scaleform/G/GFx_Movie.h>
+// #include <Scaleform/G/GFx_Value.h>
 #include <RE/U/UI.h>
 #include "skills.h"
 #include "Shared.h"
@@ -47,11 +47,14 @@
 #include <REX/LOG.h>
 #include <RE/A/ActorValueInfo.h>
 #include <RE/B/BGSDamageType.h>
-#include <Windows.h>
 #include <RE/B/BGSAction.h>
 #include <RE/E/ExtraCharge.h>
 #include <RE/E/ExtraHealth.h>
 #include <RE/B/BGSBodyPartDefs.h>
+#include <string_view>
+#include <RE/B/BSRandom.h>
+#include <RE/S/SendHUDMessage.h>
+#include "Menus/HUD_Additions.h"
 
 namespace F4CW {
 	namespace ItemDegradation {
@@ -296,7 +299,8 @@ namespace F4CW {
 		if (!Data.extraData)
 			return -1.0;
 
-		return Data.extraData->GetHealthPerc();
+		const float health = Data.extraData->GetHealthPerc();
+		return health;
 	}
 
 	float GetWeaponConditionPercent(RE::TESObjectREFR* refr)
@@ -324,7 +328,7 @@ namespace F4CW {
 			return;
 		if (!Data.extraData->HasType(RE::EXTRA_DATA_TYPE::kCharge))
 			return;
-		Value = max(1, Value);
+		Value = Value > 1 ? Value: 1;
 		((RE::ExtraCharge*)Data.extraData->GetByType(RE::EXTRA_DATA_TYPE::kCharge))->charge = Value;
 		// SetExtraData(Data.extraData, Charge, charge, Value);
 	}
@@ -936,7 +940,7 @@ void F4CW::DegradationPapyrus::ModEquippedWeaponConditionPercentage_Papyrus(std:
 	}
 
 
-	percentageIncrease = max(percentageIncrease, 0.0f);
+	percentageIncrease = percentageIncrease > 0.0f ? percentageIncrease : 0.0f;
 	if (percentageIncrease == 0.0f) {
 		// Weapon breaks.
 		RE::ActorEquipManager::GetSingleton()->UnequipItem(myActor, &weapon, false);
@@ -1024,21 +1028,26 @@ void F4CW::DegradationPapyrus::UpdateArmorRefStats_Papyrus(std::monostate, RE::T
 
 // WEAPON UTILS =======================================================================================================================
 
-void F4CW::WPNUtilities::UpdateHUDCondition(ItemDegradation::WeaponConditionData myConditionData)
+bool F4CW::WPNUtilities::UpdateHUDCondition(ItemDegradation::WeaponConditionData myConditionData)
 {
+	
 	RE::BSFixedString menuString("HUDMenu");
 	if (RE::UI::GetSingleton()->GetMenuOpen(menuString)) {
+
 		auto myHudMenu = RE::UI::GetSingleton()->GetMenu(menuString).get();
 		Scaleform::GFx::Value myConditionValue[1];
-
+		
 		float conditionValue = GetWeaponConditionPercent(myConditionData);
 
-		myConditionValue[0].SetElement(0, conditionValue);
+		myConditionValue[0] = Scaleform::GFx::Value(conditionValue);
 
-		myHudMenu->uiMovie->Invoke("root.CWHUD_loader.content.SetCondition", nullptr, myConditionValue, 1);
+		const bool result = myHudMenu->uiMovie->asMovieRoot->Invoke("root.CWHUD_loader.content.SetCondition", nullptr, myConditionValue, 1);
+			
+		return result;
 	}
 	// auto myMovieRoot = myHUDMenu->uiMovie->asMovieRoot;
-
+	
+	return false;
 	
 }
 

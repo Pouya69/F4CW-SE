@@ -3,7 +3,6 @@
 #include <detourXS/detourxs.h>
 #include <REL/ID.h>
 #include <REL/Relocation.h>
-#include <Windows.h>
 #include "debugLog.h"
 #include <cstdarg>
 #include <cstdint>
@@ -51,6 +50,25 @@ namespace F4CW {
 		float Hook_CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes);
 		void Hook_ExtraDataListSetHealthPerc(RE::ExtraDataList* a_this, float a_health);
 		float Hook_GetWeaponDisplayRateOfFire(const RE::TESObjectWEAP& a_weapon, const RE::TESObjectWEAP::InstanceData* a_data);
+
+		bool Hook_EquipObject(
+			RE::ActorEquipManager* a_actorEquipManager,
+			RE::Actor* a_actor,
+			const RE::BGSObjectInstance& a_object,
+			std::uint32_t            a_stackID,
+			std::uint32_t            a_number,
+			const RE::BGSEquipSlot* a_slot,
+			bool                     a_queueEquip,
+			bool                     a_forceEquip,
+			bool                     a_playSounds,
+			bool                     a_applyNow,
+			bool                     a_locked);
+
+		void Hook_HandleItemEquip(RE::Actor* a_this, bool bCullBone);
+
+		void Hook_OnPipboyClosed(RE::PipboyManager* a_pipboyManager);
+
+		void Hook_SetCurrentAmmoCount(RE::Actor* a_this, RE::BGSEquipIndex a_equipIndex, std::uint32_t a_count);
 
 	}
 }

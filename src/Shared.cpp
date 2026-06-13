@@ -170,3 +170,11 @@ std::string GetFormIDAsString(std::uint32_t formID)
 	}
 	return result;
 }
+
+
+
+void Shared::HUD::UpdateMenus(Scaleform::Ptr<Scaleform::GFx::ASMovieRootBase> movieRoot)
+{
+	REX::WARN("Menu Update requested event!");
+	// movieRoot->Invoke("");
+}
