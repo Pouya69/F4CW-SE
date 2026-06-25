@@ -20,6 +20,11 @@
 #include <format>
 
 namespace Skills {
+	RE::BSTArray<RE::BGSPerk*> CWPerksLevelUp;
+	RE::BSTArray<RE::ActorValueInfo*> CWSkillsLevelUp;
+	RE::BSTArray<RE::BGSSoundDescriptorForm*> ScaleformSkillSounds;
+	RE::BSTArray<RE::BGSSoundDescriptorForm*> ScaleformPerkSounds;
+
 	std::vector<RE::ActorValueInfo*> SkillsList;
 	std::unordered_map<std::string, RE::ActorValueInfo*> strSkillMap = std::unordered_map<std::string, RE::ActorValueInfo*>();
 
@@ -59,13 +64,14 @@ void InitializeGameVariables(RE::TESDataHandler* dataHandler, std::string mod_es
 	InitializeGlobalVariables(dataHandler);
 
 	// S.P.E.C.I.A.L
-	VanillaActorValues.Strength = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::StrengthID, mod_esm);
-	VanillaActorValues.Perception = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::PerceptionID, mod_esm);
-	VanillaActorValues.Endurance = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::EnduranceID, mod_esm);
-	VanillaActorValues.Charisma = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::CharismaID, mod_esm);
-	VanillaActorValues.Intelligence = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::IntelligenceID, mod_esm);
-	VanillaActorValues.Agility = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::AgilityID, mod_esm);
-	VanillaActorValues.Luck = dataHandler->LookupForm<RE::ActorValueInfo>(SPECIALFormIDs::LuckID, mod_esm);
+	RE::ActorValue* ActorValueSingleton = RE::ActorValue::GetSingleton();
+	VanillaActorValues.Strength = ActorValueSingleton->strength;
+	VanillaActorValues.Perception = ActorValueSingleton->perception;
+	VanillaActorValues.Endurance = ActorValueSingleton->endurance;
+	VanillaActorValues.Charisma = ActorValueSingleton->charisma;
+	VanillaActorValues.Intelligence = ActorValueSingleton->intelligence;
+	VanillaActorValues.Agility = ActorValueSingleton->agility;
+	VanillaActorValues.Luck = ActorValueSingleton->luck;
 
 	// Skills
 	CW_Skills.Barter = dataHandler->LookupForm<RE::ActorValueInfo>(0x048FE6, mod_esm);
@@ -117,6 +123,68 @@ void InitializePerks(RE::TESDataHandler* dataHandler, std::string mod_esm) {
 	CWPerks.WeaponConditionHandlerPerk = dataHandler->LookupForm<RE::BGSPerk>(0x0D26DD, mod_esm);
 	
 	CWNPCPerksList.emplace_back(CWPerks.WeaponConditionHandlerPerk);
+}
+
+void GetLevelUpFormsFromGame()
+{
+	RE::TESDataHandler* tesDataHandler = RE::TESDataHandler::GetSingleton();
+
+	RE::BGSListForm* perkList = tesDataHandler->LookupForm<RE::BGSListForm>(0x048FE8, MOD_ESM);
+	for (std::uint32_t perkEntry = 0; perkEntry < perkList->arrayOfForms.size(); perkEntry++)
+	{
+		RE::BGSPerk* perk = static_cast<RE::BGSPerk*>(perkList->arrayOfForms[perkEntry]);
+		if (perk == nullptr)
+		{
+			// Entry in list is not a perk.
+			REX::DEBUG("Skills::GetLevelUpFormsFromGame, form: {} in Perk formlist is not a perk.", perkList->arrayOfForms[perkEntry]->GetFormEditorID());
+			continue;
+		}
+
+		if (!perk->data.trait && perk->data.playable)
+		{
+			CWPerksLevelUp.push_back(perk);
+		}
+	}
+
+	auto soundsList = tesDataHandler->LookupForm<RE::BGSListForm>(0x0CCD1C, MOD_ESM);
+	for (std::uint32_t soundEntry = 0; soundEntry < soundsList->arrayOfForms.size(); soundEntry++) {
+		RE::BGSSoundDescriptorForm* soundForm = static_cast<RE::BGSSoundDescriptorForm*>(soundsList->arrayOfForms[soundEntry]);
+		if (soundForm == nullptr) {
+			// Entry in list is not a sound.
+			REX::DEBUG("Skills::GetLevelUpFormsFromGame, form: {} in Sound formlist is not a sound. SkillSounds", soundsList->arrayOfForms[soundEntry]->GetFormEditorID());
+			continue;
+		}
+
+		Skills::ScaleformSkillSounds.push_back(soundForm);
+	}
+
+	auto soundsList2 = tesDataHandler->LookupForm<RE::BGSListForm>(0x0E0A1C, MOD_ESM);
+	for (std::uint32_t soundEntry = 0; soundEntry < soundsList2->arrayOfForms.size(); soundEntry++) {
+		RE::BGSSoundDescriptorForm* soundForm = static_cast<RE::BGSSoundDescriptorForm*>(soundsList2->arrayOfForms[soundEntry]);
+		if (soundForm == nullptr) {
+			// Entry in list is not a sound.
+			REX::DEBUG("Skills::GetLevelUpFormsFromGame, form: {} in Sound formlist is not a sound. PerkSounds", soundsList2->arrayOfForms[soundEntry]->GetFormEditorID());
+			continue;
+		}
+
+		Skills::ScaleformPerkSounds.push_back(soundForm);
+	}
+
+	
+
+
+	RE::BGSListForm* skillList = tesDataHandler->LookupForm<RE::BGSListForm>(0x048FE7, MOD_ESM);
+	for (std::uint32_t skillEntry = 0; skillEntry < skillList->arrayOfForms.size(); skillEntry++)
+	{
+		RE::ActorValueInfo* skill = static_cast<RE::ActorValueInfo*>(skillList->arrayOfForms[skillEntry]);
+		if (skill == nullptr)
+		{
+			// Entry in list is not a skill.
+			REX::DEBUG("Skills::GetLevelUpFormsFromGame, form: {} in Skill formlist is not a skill.", perkList->arrayOfForms[skillEntry]->GetFormEditorID());
+			continue;
+		}
+		CWSkillsLevelUp.push_back(skill);
+	}
 }
 
 // Files in ESPs.
@@ -176,7 +244,7 @@ void CW_SkillsPapyrus::DEBUG_LogSkillToConsole_Papyrus(std::monostate, RE::Actor
 
 float GetAVValue(RE::Actor* Actor, RE::ActorValueInfo* valueInfo)
 {
-	if (!Actor)
+	if (!Actor || !valueInfo)
 		return NULL;
 
 	return Actor->GetActorValue(*valueInfo);
@@ -184,7 +252,7 @@ float GetAVValue(RE::Actor* Actor, RE::ActorValueInfo* valueInfo)
 
 float GetBaseAVValue(RE::Actor* Actor, RE::ActorValueInfo* valueInfo)
 {
-	if (!Actor)
+	if (!Actor || !valueInfo)
 		return NULL;
 
 	return Actor->GetBaseActorValue(*valueInfo);
@@ -267,14 +335,18 @@ void Skills::RegisterForSkillLink()
 	// For being able to find these later by name.
 	strSkillMap.emplace("Barter", CW_Skills.Barter);
 	strSkillMap.emplace("BigGuns", CW_Skills.BigGuns);
+	strSkillMap.emplace("Big Guns", CW_Skills.BigGuns);
 	strSkillMap.emplace("EnergyWeapons", CW_Skills.EnergyWeapons);
+	strSkillMap.emplace("Energy Weapons", CW_Skills.EnergyWeapons);
 	strSkillMap.emplace("Explosives", CW_Skills.Explosives);
 	strSkillMap.emplace("Lockpick", CW_Skills.Lockpick);
 	strSkillMap.emplace("Medicine", CW_Skills.Medicine);
 	strSkillMap.emplace("MeleeWeapons", CW_Skills.MeleeWeapons);
+	strSkillMap.emplace("Melee Weapons", CW_Skills.MeleeWeapons);
 	strSkillMap.emplace("Repair", CW_Skills.Repair);
 	strSkillMap.emplace("Science", CW_Skills.Science);
 	strSkillMap.emplace("SmallGuns", CW_Skills.SmallGuns);
+	strSkillMap.emplace("Small Guns", CW_Skills.SmallGuns);
 	strSkillMap.emplace("Sneak", CW_Skills.Sneak);
 	strSkillMap.emplace("Speech", CW_Skills.Speech);
 	strSkillMap.emplace("Unarmed", CW_Skills.Unarmed);
@@ -316,7 +388,9 @@ void Skills::RegisterLinkedAV(RE::ActorValueInfo* AV, RE::ActorValueInfo::Deriva
 	skillsToSpecialMap[AV].push_back(linkedToSPECIAL_02);
 
 	// @TODO
-	// AV->derivationFunction = CalcFunction;
+	AV->derivationFunction = CalcFunction;
+	// AV->abbreviation
+	// AV->VTABLE = 
 	//AV->VTABLE
 }
 

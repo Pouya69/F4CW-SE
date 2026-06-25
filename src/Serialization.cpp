@@ -138,7 +138,9 @@ namespace F4CWSerialization {
                             RE::BGSListForm* list = dataHandler->LookupForm<RE::BGSListForm>(newListID, MOD_ESM);
                             RE::BGSKeyword* keyword = dataHandler->LookupForm<RE::BGSKeyword>(newFormID, MOD_ESM);
 
-                            armorRepairList.emplace(list, keyword);
+                            AddToWeaponRepairList(list, keyword);
+
+                            // armorRepairList.emplace(list, keyword);
                         }
                     }
                 }
@@ -168,7 +170,8 @@ namespace F4CWSerialization {
                             RE::BGSListForm* list = dataHandler->LookupForm<RE::BGSListForm>(newListID, MOD_ESM);
                             RE::BGSKeyword* keyword = dataHandler->LookupForm<RE::BGSKeyword>(newFormID, MOD_ESM);
 
-                            armorRepairList.emplace(list, keyword);
+                            AddToArmorRepairList(list, keyword);
+                            // armorRepairList.emplace(list, keyword);
                         }
                     }
                 }

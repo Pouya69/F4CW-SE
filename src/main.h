@@ -16,3 +16,5 @@ void InitializeCustomConsoleCommands();
 bool RegisterScaleforms(const F4SE::ScaleformInterface* scaleformInterface);
 
 void InitializeGameEvents();
+
+void GetAllINISettings();

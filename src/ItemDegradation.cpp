@@ -55,6 +55,13 @@
 #include <RE/B/BSRandom.h>
 #include <RE/S/SendHUDMessage.h>
 #include "Menus/HUD_Additions.h"
+#include <Windows.h>
+#include <vector>
+#include <RE/B/BGSInventoryItem.h>
+#include <RE/P/PowerArmor.h>
+#include <Scaleform/G/GFx_Value.h>
+#include "../src/Scaleform_F4CW.h"
+
 
 namespace F4CW {
 	namespace ItemDegradation {
@@ -207,14 +214,19 @@ namespace F4CW {
 		{
 			if (myActor)
 			{
-				auto weapon = static_cast<RE::TESObjectREFR*>(myActor->currentProcess->middleHigh->equippedItems[0].item.object);
+				auto currentWeapon = InventoryUtils::GetCurrentEquippedWeapon(myActor);
 				// auto weaponObject = static_cast<RE::TESObjectWEAP*>(myActor->currentProcess->middleHigh->equippedItems[0].item.object);
-				if (weapon) {
+				if (currentWeapon) {
 					actor = myActor;
-					Form = weapon;
-					extraData = weapon->extraList.get();
-					instance = static_cast<RE::TESObjectWEAP::InstanceData*>(myActor->currentProcess->middleHigh->equippedItems[0].item.instanceData.get());
+					Form = currentWeapon->object;
+					extraData = currentWeapon->stackData->extra.get();
+					// instance = GetWeaponInstanceData(extraData);
+					//instance = myActor->currentProcess->middleHigh->equippedItems[0].item.instanceData.get();
 					invHandle = 0;
+					//invHandle = InventoryUtils::GetHandleIDByIndex();
+					instance = GetWeaponInstanceData(extraData);
+					// instance = static_cast<RE::TESObjectWEAP::InstanceData*>();
+					
 				}
 				else {
 					REX::WARN(std::format("Tried to get equipoped weapon from actor '{}' but didn't cast", myActor->GetDisplayFullName()));
@@ -405,7 +417,10 @@ namespace F4CW {
 		SetArmorConditionMaximum(ItemDegradation::ArmorConditionData(refr), Value);
 	}
 	void SetArmorConditionPercent(ItemDegradation::ArmorConditionData Data, float Value)
-	{}
+	{
+		Data.extraData->SetHealthPerc(Value);
+	}
+
 	void SetArmorConditionPercent(RE::TESObjectREFR * refr, float Value)
 	{
 		if (!refr)
@@ -1242,7 +1257,8 @@ float F4CW::WPNUtilities::GetWeaponDamage(ItemDegradation::WeaponConditionData m
 	//Rate of Fire
 	if (!IsMeleeWeapon(myConditionData))
 	{
-		myInstance->attackDelaySec = CalculateUpdatedRateOfFireValue(myConditionData, currentCondition);
+		// myInstance->attackDelaySec = CalculateUpdatedRateOfFireValue(myConditionData, currentCondition);
+		CalculateUpdatedRateOfFireValue(myConditionData, currentCondition);
 	}
 
 	switch (myInstance->flags.get())
@@ -1293,7 +1309,7 @@ float F4CW::WPNUtilities::GetWeaponDamage(ItemDegradation::WeaponConditionData m
 
 double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, double currentCondition)
 {
-	return CalculateUpdatedRateOfFireValue(myConditionData.Form, nullptr, currentCondition);
+	return CalculateUpdatedRateOfFireValue(myConditionData.Form, myConditionData.instance, currentCondition);
 }
 
 double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, RE::TESObjectWEAP::InstanceData* weaponInstanceData, double currentCondition)
@@ -1309,7 +1325,7 @@ double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponFo
 
 	auto baseROF = GetCWWeaponConditionInfo(baseWPNForm);	//	unkC0 == fAttackSeconds;
 	if (baseROF.BaseAttackDelay < 0) {
-		LOG_WARNING(std::format("Weapon '{}' is not in WeaponConditionMapping. Ignoring Rate of Fire change...", weaponForm->GetFormID()).c_str());
+		LOG_WARNING(std::format("Weapon '{}' is not in WeaponConditionMapping. Ignoring Rate of Fire change...", weaponForm->GetFormEditorID()).c_str());
 		return -1.0f;
 	}
 
@@ -1386,6 +1402,14 @@ double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(RE::TESForm* weaponFo
 	//REX::WARN("%s: Updated Attack Delay = %f", baseWPNForm->GetFullName(), result);
 
 	return result;
+}
+
+RE::TESForm* F4CW::WPNUtilities::GetEquippedWeaponForm(RE::Actor* actor)
+{
+	if (!actor->currentProcess || !actor->currentProcess->middleHigh || actor->currentProcess->middleHigh->equippedItems.size() == 0)
+		return nullptr;
+
+	return actor->currentProcess->middleHigh->equippedItems[0].item.object;
 }
 
 bool F4CW::WPNUtilities::IsMeleeWeapon(ItemDegradation::WeaponConditionData myConditionData)
@@ -1573,7 +1597,7 @@ bool F4CW::ARMOUtilities::CanArmorBeRepairedWithOther(RE::TESObjectARMO* armor1,
 
 	return false;
 }
-/*
+
 
 
 void F4CW::ARMOUtilities::UpdateArmorStats(ItemDegradation::ArmorConditionData myConditionData)
@@ -1657,19 +1681,17 @@ void F4CW::ARMOUtilities::UpdateArmorStats(ItemDegradation::ArmorConditionData m
 }
 
 
-void F4CW::ARMOUtilities::UpdateArmorStatsOnHit(RE::Actor* actor, std::uint32_t eDamageLimb, std::uint32_t eIncomingDamageType, float fDamage)
+void F4CW::ARMOUtilities::UpdateArmorStatsOnHit(RE::Actor* actor, std::uint32_t eDamageLimb, const bool isMelee, const bool isUnarmed, float fDamage)
 {
 	RE::BGSKeyword* checkKeyword = nullptr;
 
-	if (actor != GetPlayer())
+	if (actor != RE::PlayerCharacter::GetSingleton())
 	{
 		//	Ignoring any NPCs
 		return;
 	}
 
-	bool isPowerArmor = WornHasKeyword(actor, ItemDegradation::armorTypePower);
-	bool isMelee = (eIncomingDamageType == RE::damage);
-	bool isUnarmed = (eIncomingDamageType == IncomingDamageType::kDamage_Unarmed || eIncomingDamageType == IncomingDamageType::kDamage_Unknown);
+	bool isPowerArmor = RE::PowerArmor::ActorInPowerArmor(*actor);
 
 	switch (static_cast<RE::BGSBodyPartDefs::LIMB_ENUM>(eDamageLimb))
 	{
@@ -1763,18 +1785,113 @@ void F4CW::ARMOUtilities::UpdateArmorStatsOnHit(RE::Actor* actor, std::uint32_t 
 	{
 		RE::BGSInventoryItem invItem = GetEquippedArmorInventoryItemBasedOnKeyword(actor, checkKeyword);
 
-		if (invItem.for)
+		if (invItem.object)
 		{
 			//_MESSAGE("Got Form 0x%08X for Armor Degredation", invItem.form->formID);
-			ItemDegradation::ArmorConditionData conditionData = ItemDegradation::ArmorConditionData(actor, invItem.form, invItem.stack->extraData);
+			ItemDegradation::ArmorConditionData conditionData = ItemDegradation::ArmorConditionData(actor, invItem.object, invItem.stackData->extra.get());
 			if (!isUnarmed)
 			{
-				ArmorDegrade degrade{};
+				ItemDegradation::ArmorDegrade degrade{};
 				degrade.fDamageDealt = fDamage;
 				degrade.isMelee = isMelee;
+
+
 				ModArmorCondition(conditionData, degrade);
 			}
 		}
 	}
 }
-*/
+
+void F4CW::ARMOUtilities::ModArmorCondition(ItemDegradation::ArmorConditionData conditionData, ItemDegradation::ArmorDegrade degradeData)
+{
+	/*
+	double armourHealth = conditionData.extraData->GetHealthPerc();
+	RE::TESObjectARMO* armor = static_cast<RE::TESObjectARMO*>(conditionData.Form);
+	if (armourHealth > 0.0f) {
+		REX::DEBUG("Armor condition of '{}' before degradation: {}", armor->GetFormEditorID(), armourHealth);
+		
+		const double degradationAmount = (degradeData.fDamageDealt - DR_ForHitLimb) / DR_ForHitLimb * Shared::fArmourConditionReductionPerPercentage->GetValue();
+		armourHealth = max(armourHealth - degradationAmount, 0.0f);
+
+		if (armourHealth == 0.0f) {
+			// Armor breaks.
+			RE::BGSObjectInstance* armorInstance = new RE::BGSObjectInstance(armor, &armor->armorData);
+			inventoryList->rwLock.unlock_read();
+			RE::ActorEquipManager::GetSingleton()->UnequipObject(a_actor, armorInstance, 1, armor->equipSlot, 0, false, false, true, true, nullptr);
+			inventoryList->rwLock.lock_read();
+			if (a_actor == playerCharacter) {
+				RE::SendHUDMessage::ShowHUDMessage("$F4CW_ArmorBroken", "00DCUIWeaponBreak", true, true);
+				RE::PipboyDataManager::GetSingleton()->inventoryData.RepopulateItemCardOnSection(RE::ENUM_FORM_ID::kARMO);
+			}
+			else {
+				RE::SendHUDMessage::ShowHUDMessage(std::format("You broke {}'s armor!", a_actor->GetDisplayFullName()).c_str(), "00DCUIWeaponBreak", true, true);
+			}
+		}
+
+		armorExtraData->SetHealthPerc(armourHealth);
+		// F4CW::ARMOUtilities::UpdateArmorStats(ItemDegradation::ArmorConditionData(a_actor, armor, armorExtraData));
+
+		LOG_TO_CONSOLE(std::format("Armor condition of '{}' after degradation: {}. degradationAmount: {}\n", armor->GetFormEditorID(), armourHealth, degradationAmount).c_str());
+		REX::DEBUG("Armor condition of '{}' after degradation: {}. degradationAmount: {}", armor->GetFormEditorID(), armorExtraData->GetHealthPerc(), degradationAmount);
+	}
+	else {
+		InitializeArmorCondition(conditionData);
+	}
+	*/
+}
+
+std::vector<RE::BGSInventoryItem> F4CW::ARMOUtilities::GetEquippedArmorInventoryItems(RE::Actor* actor)
+{
+	std::vector<RE::BGSInventoryItem> result{};
+
+	if (!actor)
+	{
+		actor = RE::PlayerCharacter::GetSingleton();
+	}
+
+	auto inventory = actor->inventoryList;
+	if (inventory)
+	{
+		inventory->rwLock.lock_read();
+		inventory->rwLock.lock_write();
+
+		for (int i = 0; i < inventory->data.size(); i++)
+		{
+			RE::BGSInventoryItem iter = inventory->data[i];
+
+			if ( iter.stackData->IsEquipped() && iter.object->GetFormType() == RE::ENUM_FORM_ID::kARMO)
+			{
+				result.push_back(iter);
+			}
+		}
+
+		inventory->rwLock.unlock_read();
+		inventory->rwLock.unlock_write();
+	}
+	
+
+	return result;
+}
+
+RE::BGSInventoryItem F4CW::ARMOUtilities::GetEquippedArmorInventoryItemBasedOnKeyword(RE::Actor* actor, RE::BGSKeyword* keyword)
+{
+	std::vector<RE::BGSInventoryItem> equippedArmors = GetEquippedArmorInventoryItems(actor);
+
+	RE::BGSInventoryItem result{};
+
+	for (int i = 0; i < equippedArmors.size(); i++)
+	{
+		RE::BGSInventoryItem invItem = equippedArmors[i];
+		RE::TESObjectARMO* armor = static_cast<RE::TESObjectARMO*>(invItem.object);
+
+		if (armor)
+		{
+			if (ArmorHasKeyword(armor, keyword))
+			{
+				return invItem;
+			}
+		}
+	}
+
+	return result;
+}

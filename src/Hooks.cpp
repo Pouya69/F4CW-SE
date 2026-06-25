@@ -71,7 +71,9 @@ namespace F4CW {
 					willHaveHealth = true;
 					
 					if (traverse->extra->GetHealthPerc() < 0.0f) {
-						LOG_TO_CONSOLE("Added weapon first time.\n");
+						if (tempREFR->IsMeleeWeapon())
+							LOG_TO_CONSOLE("Added melee first time.\n");
+						LOG_TO_CONSOLE(std::format("Added weapon first time. type: {}\n", (std::int32_t) tempREFR->weaponData.type.get()).c_str());
 						const float cond = RE::BSRandom::Float(0.45f, 0.85f);
 						traverse->extra->SetHealthPerc(cond);
 
@@ -106,9 +108,9 @@ namespace F4CW {
 				}
 
 				// GetHealthPerc returns -1.0 if it can't find the 'kHealth' type.
-				if (willHaveHealth && traverse->extra->GetHealthPerc() < 0.0f) {
+				if (traverse->extra->GetHealthPerc() < 0.0f) {
 					// Set health randomly
-					LOG_TO_CONSOLE(std::format("Added health to item '{}' added.", a_boundObject->GetFormEditorID()).c_str());
+					LOG_TO_CONSOLE(std::format("Added health to item '{}' added.\n", a_boundObject->GetFormID()).c_str());
 					traverse->extra->SetHealthPerc(RE::BSRandom::Float(0.45f, 0.85f));
 					break;
 				}
@@ -293,8 +295,9 @@ namespace F4CW {
 		float Hook_CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes) {
 			float retailDamage = CombatFormulasCalcTargetedLimbDamageOriginal(a_actor, a_bodyPart, a_physicalDamage, a_damageTypes);
 			
+			// Only player.
 			RE::PlayerCharacter* playerCharacter = RE::PlayerCharacter::GetSingleton();
-			if (a_actor == playerCharacter && (playerCharacter->IsGodMode() || Shared::noArmorDegradation))
+			if (a_actor != playerCharacter || playerCharacter->IsGodMode() || Shared::noArmorDegradation)
 				return retailDamage;
 
 			RE::ActorValueInfo* targetedLimbAV = a_bodyPart->data.actorValue;
@@ -338,6 +341,7 @@ namespace F4CW {
 						}
 
 						armorExtraData->SetHealthPerc(armourHealth);
+						// F4CW::ARMOUtilities::UpdateArmorStats(ItemDegradation::ArmorConditionData(a_actor, armor, armorExtraData));
 
 						LOG_TO_CONSOLE(std::format("Armor condition of '{}' after degradation: {}. degradationAmount: {}\n", armor->GetFormEditorID(), armourHealth, degradationAmount).c_str());
 						REX::DEBUG("Armor condition of '{}' after degradation: {}. degradationAmount: {}", armor->GetFormEditorID(), armorExtraData->GetHealthPerc(), degradationAmount);
@@ -376,6 +380,36 @@ namespace F4CW {
 			// LOG_TO_CONSOLE(std::format("Original FireRate: {}, Attack Delay: {}", original, a_data->attackDelaySec).c_str());
 
 			return a_data->attackDelaySec;
+		}
+
+
+		DetourXS hook_ClosedownPipboy;
+		typedef void(ClosedownPipboySig)(RE::PipboyManager*);
+		REL::Relocation<ClosedownPipboySig> ClosedownPipboyOriginal;
+		void Hook_ClosedownPipboy(RE::PipboyManager* a_manager)
+		{
+			auto ui = RE::UI::GetSingleton();
+			RE::BSFixedString s = "CWRepairMenu";
+			const bool bRepairMenuOpen = ui->GetMenuOpen(s);
+			if (!bRepairMenuOpen)
+				ClosedownPipboyOriginal(a_manager);
+
+			REX::DEBUG(std::format("Closedownpipboy called. RepairMenu was open: '{}'", bRepairMenuOpen ? 1 : 0).c_str());
+
+		}
+
+		DetourXS hook_LowerPipboy;
+		typedef void(LowerPipboySig)(RE::PipboyManager*, RE::PipboyManager::LOWER_REASON);
+		REL::Relocation<LowerPipboySig> LowerPipboyOriginal;
+		void Hook_LowerPipboy(RE::PipboyManager* a_manager, RE::PipboyManager::LOWER_REASON a_reason)
+		{
+			auto ui = RE::UI::GetSingleton();
+			RE::BSFixedString s = "CWRepairMenu";
+			const bool bRepairMenuOpen = ui->GetMenuOpen(s);
+			if (!bRepairMenuOpen)
+				LowerPipboyOriginal(a_manager, a_reason);
+
+			REX::DEBUG(std::format("LowerPipboy called. RepairMenu was open: '{}'", bRepairMenuOpen ? 1 : 0).c_str());
 		}
 
 		DetourXS hook_EquipObject;
@@ -427,10 +461,21 @@ namespace F4CW {
 		REL::Relocation<OnPipboyClosedSig> OnPipboyClosedOriginal;
 		void Hook_OnPipboyClosed(RE::PipboyManager* a_pipboyManager)
 		{
-			OnPipboyClosedOriginal(a_pipboyManager);
-			auto weaponConditionData = ItemDegradation::WeaponConditionData(RE::PlayerCharacter::GetSingleton());
-			if (weaponConditionData.extraData && weaponConditionData.Form)
-				F4CW::WPNUtilities::UpdateHUDCondition(weaponConditionData);
+			auto ui = RE::UI::GetSingleton();
+			RE::BSFixedString s = "CWRepairMenu";
+			const bool bRepairMenuOpen = ui->GetMenuOpen(s);
+			if (!bRepairMenuOpen) {
+				OnPipboyClosedOriginal(a_pipboyManager);
+				/*
+				auto weaponConditionData = ItemDegradation::WeaponConditionData(RE::PlayerCharacter::GetSingleton());
+				if (weaponConditionData.extraData && weaponConditionData.Form)
+					F4CW::WPNUtilities::UpdateHUDCondition(weaponConditionData);
+					*/
+			}
+
+			REX::DEBUG(std::format("Closedownpipboy called. RepairMenu was open: '{}'", bRepairMenuOpen ? 1 : 0).c_str());
+
+			
 
 		}
 
@@ -455,6 +500,10 @@ namespace F4CW {
 				RegisterDetourFunction(hook_TESObjectWeaponFire, RE::ID::TESObjectWEAP::Fire, &Hook_TESObjectWeaponFire, TESObjectWeaponFireOriginal, "TESObjectWeaponFire");
 				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &Hook_CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
 				RegisterDetourFunction(hook_SetHealthPerc, RE::ID::ExtraDataList::SetHealthPerc, &Hook_ExtraDataListSetHealthPerc, SetHealthPercOriginal, "SetHealthPerc");
+				
+				// RegisterDetourFunction(hook_ClosedownPipboy, RE::ID::PipboyManager::ClosedownPipboy, &Hook_ClosedownPipboy, ClosedownPipboyOriginal, "ClosedownPipboy");
+				// RegisterDetourFunction(hook_LowerPipboy, RE::ID::PipboyManager::LowerPipboy, &Hook_LowerPipboy, LowerPipboyOriginal, "LowerPipboy");
+
 				// RegisterDetourFunction(hook_EquipObject, RE::ID::ActorEquipManager::EquipObject, &Hook_EquipObject, EquipObjectOriginal, "EquipObject");
 				// RegisterDetourFunction(hook_GetWeaponDisplayRateOfFire, RE::ID::CombatFormulas::GetWeaponDisplayRateOfFire, &Hook_GetWeaponDisplayRateOfFire, GetWeaponDisplayRateOfFireOriginal, "GetWeaponDisplayRateOfFire");
 				// RegisterDetourFunction(hook_HandleItemEquip, RE::ID::Actor::HandleItemEquip, &Hook_HandleItemEquip, HandleItemEquipOriginal, "HandleItemEquipItem");

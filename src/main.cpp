@@ -1,9 +1,8 @@
 #include "main.h"
-
 #include <F4SE/API.h>
 #include <F4SE/Interfaces.h>
 #include <RE/B/BSScript_IVirtualMachine.h>
-
+#include "Menus/RepairMenu.h"
 #include "debugLog.h"
 #include "skills.h"
 #include <RE/T/TESDataHandler.h>
@@ -13,9 +12,18 @@
 #include "ItemDegradation.h"
 #include "Shared.h"
 #include "Serialization.h"
+#include "Events/OnHitEvent.h"
 #include "Events/OnEquipEvent.h"
 #include "Events/OnMenuOpenCloseEvent.h"
+#include "Events/OnLevelUpEvent.h"
 #include "Menus/HUD_Additions.h"
+#include "Menus/LevelUpMenu.h"
+#include "Patches/LoadEditorIDs.h"
+#include <format>
+#include <string_view>
+#include <variant>
+#include <REX/LOG.h>
+#include "Menus/PipboyTabs.h"
 
 bool RegisterCustomFunctions(RE::BSScript::IVirtualMachine* vm) {
 	vm->BindNativeMethod("TCW:F4CW", "PouyaFunction", F4CW::PouyaFunction, false, false);
@@ -27,6 +35,14 @@ bool RegisterCustomFunctions(RE::BSScript::IVirtualMachine* vm) {
 
 	if (!F4CW::ItemDegradation::RegisterDegradationFunctions(vm)) {
 		// LOG_ERROR("Could not register Degradation funcitons...");
+		return false;
+	}
+
+	if (!F4CW_Menus::LevelUpMenu::LevelUpMenu_Papyrus::RegisterFunctions(vm)) {
+		return false;
+	}
+
+	if (!F4CW_Menus::RepairMenu::RegisterRepairMenuFunctions(vm)) {
 		return false;
 	}
 
@@ -92,6 +108,8 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
 
 	LOG_INFO("Registering hooks...");
 	F4CW::Hooks::Registers::RegisterAllHooks();
+
+	F4CW::Patches::LoadEditorIDs::Install();
 	LOG_INFO("All hooks are registered.");
 
 	return true;
@@ -112,15 +130,12 @@ bool InitializeSharedGameVariables()
 
 	LOG_INFO("All variables initialized.");
 
-
-
-
 	return true;
 }
 
 void GameDataLoaded()
 {
-
+	
 }
 
 void InitializeCustomConsoleCommands() {
@@ -134,7 +149,29 @@ bool RegisterScaleforms(const F4SE::ScaleformInterface* scaleformInterface)
 		REX::CRITICAL("Failed to register 'CWHUDAdditions' Scaleform."sv);
 		return false;
 	}
-	
+	REX::DEBUG("Registered CWHUDAdditions");
+
+	F4CW_Menus::LevelUpMenu::RegisterMenu();
+	if (!scaleformInterface->Register("CWLevelUpMenu", F4CW_Menus::LevelUpMenu::RegisterScaleform))
+	{
+		REX::CRITICAL("Failed to register 'LevelUpMenu', marking as incompatible."sv);
+		return false;
+	}
+	REX::DEBUG("Registered CWLevelUpMenu");
+
+	if (!scaleformInterface->Register("CWPipboy", F4CW_Menus::PipboyTabs::RegisterScaleform)) {
+		REX::CRITICAL("Failed to register 'CWPipboy', marking as incompatible"sv);
+		return false;
+	}
+	REX::DEBUG("Registered CWPipboy");
+
+	F4CW_Menus::RepairMenu::CreateRepairMenu();
+	REX::DEBUG("Registered CWRepairMenu");
+	if (!scaleformInterface->Register("CWRepairMenu", F4CW_Menus::RepairMenu::RegisterScaleform)) {
+		REX::CRITICAL("Failed to register 'CWRepairMenu', marking as incompatible"sv);
+		return false;
+	}
+	REX::DEBUG("Registered CWRepairMenu");
 	return true;
 }
 
@@ -142,6 +179,14 @@ void InitializeGameEvents()
 {
 	F4CWEvents::RegisterOnMenuOpenCloseEvent();
 	F4CWEvents::RegisterOnEquipEvent();
+	F4CWEvents::RegisterOnHitEvent();
+	F4CWEvents::RegisterOnLevelUpEvent();
+}
+
+void GetAllINISettings()
+{
+	F4CW_Menus::LevelUpMenu::GetINIOptions();
+	F4CW_Menus::RepairMenu::RepairMenuFunctions::GetINIOptions();
 }
 
 void GameDataReady()
@@ -158,7 +203,11 @@ void GameDataReady()
 	LOG_INFO("Initializing game events...");
 	InitializeGameEvents();
 	LOG_INFO("Game events initialized");
+	LOG_INFO("Initializing INI settings...");
+	GetAllINISettings();
+	LOG_INFO("Initializing INI settings completed.");
 	F4CW::ItemDegradation::DefineItemDegradationFormsFromGame();
+	F4CW_Menus::RepairMenu::DefineRepairMenuFormsFromGame();
 
 	LOG_INFO("PACW Plugin is fully ready.");
 }

@@ -13,6 +13,12 @@
 #include <REL/Relocation.h>
 #include <RE/T/TESForm.h>
 #include <RE/T/TESObjectREFR.h>
+#include <RE/B/BGSInventoryItem.h>
+#include <RE/B/BSFixedString.h>
+#include <RE/E/ENUM_FORM_ID.h>
+#include <RE/E/ExtraDataList.h>
+#include <RE/T/TESObjectWEAP.h>
+#include <Scaleform/G/GFx_Value.h>
 
 
 // Using our custom addresses. UPDATE-RELATED
@@ -35,17 +41,19 @@ class OnEquipEvent : public RE::BSTEventSink<RE::TESEquipEvent> {
 		if (!a_event.equipped)
 			return RE::BSEventNotifyControl::kContinue;
 
-		REX::DEBUG("Equip Event!");
+		
 
 		auto weapon = RE::TESForm::GetFormByID(a_event.baseObject);
 
-		RE::TESObjectWEAP* weaponObject;
-		RE::ExtraDataList* extraData;
+		RE::TESObjectWEAP* weaponObject = nullptr;
+		RE::ExtraDataList* extraData = nullptr;
 
 		for (RE::BGSInventoryItem& inventoryItem : player->inventoryList->data) {
 			if (!inventoryItem.IsEquipped(0))
 				continue;
-			
+			if (!inventoryItem.object || inventoryItem.object->GetFormType() != RE::ENUM_FORM_ID::kWEAP)
+				continue;
+
 			auto weaponObj = static_cast<RE::TESObjectWEAP*>(inventoryItem.object);
 
 			if (weaponObj) {
@@ -64,11 +72,12 @@ class OnEquipEvent : public RE::BSTEventSink<RE::TESEquipEvent> {
 
 		RE::BSFixedString menuString("HUDMenu");
 		if (RE::UI::GetSingleton()->GetMenuOpen(menuString)) {
-
+			
 			auto myHudMenu = RE::UI::GetSingleton()->GetMenu(menuString).get();
 			Scaleform::GFx::Value myConditionValue[1];
 
 			float conditionValue = extraData->GetHealthPerc();
+			REX::DEBUG(std::format("Equip Event! Adjusting hud conditions: {}", conditionValue).c_str());
 
 			myConditionValue[0] = Scaleform::GFx::Value(conditionValue);
 
@@ -84,6 +93,7 @@ class OnEquipEvent : public RE::BSTEventSink<RE::TESEquipEvent> {
 namespace F4CWEvents {
 	static void RegisterOnEquipEvent() {
 		auto onEquipEvent = new OnEquipEvent();
+		// RE::TESEquipEvent::GetEventSource()->RegisterSink(onEquipEvent);
 		EquipEventSource::GetSingleton()->RegisterSink(onEquipEvent);
 		REX::DEBUG("Registered 'OnEquipEvent' sink.");
 	}

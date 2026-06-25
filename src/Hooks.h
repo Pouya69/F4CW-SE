@@ -19,6 +19,14 @@
 #include <RE/T/TESForm.h>
 #include <RE/T/TESObjectREFR.h>
 #include <RE/T/TESObjectWEAP.h>
+#include <Windows.h>
+#include <RE/A/ActorEquipManager.h>
+#include <RE/B/BGSBodyPartData.h>
+#include <RE/B/BGSEquipSlot.h>
+#include <RE/B/BGSTypedFormValuePair.h>
+#include <RE/B/BSTArray.h>
+#include <RE/B/BSTTuple.h>
+#include <RE/E/ExtraDataList.h>
 
 namespace F4CW {
 	namespace Hooks {
@@ -50,6 +58,9 @@ namespace F4CW {
 		float Hook_CombatFormulasCalcTargetedLimbDamage(RE::Actor* a_actor, const RE::BGSBodyPart* a_bodyPart, float a_physicalDamage, RE::BSTArray<RE::BSTTuple<RE::TESForm*, RE::BGSTypedFormValuePair::SharedVal>, RE::BSTArrayHeapAllocator>* a_damageTypes);
 		void Hook_ExtraDataListSetHealthPerc(RE::ExtraDataList* a_this, float a_health);
 		float Hook_GetWeaponDisplayRateOfFire(const RE::TESObjectWEAP& a_weapon, const RE::TESObjectWEAP::InstanceData* a_data);
+
+		void Hook_ClosedownPipboy(RE::PipboyManager* a_manager);
+		void Hook_LowerPipboy(RE::PipboyManager* a_manager, RE::PipboyManager::LOWER_REASON a_reason);
 
 		bool Hook_EquipObject(
 			RE::ActorEquipManager* a_actorEquipManager,

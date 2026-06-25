@@ -13,6 +13,11 @@
 #include <stdint.h>
 #include <cstdint>
 #include <RE/E/ExtraDataList.h>
+#include <variant>
+#include <RE/B/BGSInventoryItem.h>
+#include <RE/T/TESDataHandler.h>
+#include <RE/T/TESEquipEvent.h>
+#include <RE/W/WEAPON_TYPE.h>
 
 namespace F4CW {
 	namespace ItemDegradation {
@@ -130,6 +135,7 @@ namespace F4CW {
 		{
 			float	fDamageDealt;
 			bool	isMelee;
+			RE::Actor* causeActor;
 		};
 
 	}
@@ -144,8 +150,10 @@ namespace F4CW {
 		float GetWeaponDamage(ItemDegradation::WeaponConditionData myConditionData);
 		double CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, double currentCondition);
 		double CalculateUpdatedRateOfFireValue(RE::TESForm* weaponForm, RE::TESObjectWEAP::InstanceData* weaponInstanceData, double currentCondition);
-		/*
+
 		RE::TESForm* GetEquippedWeaponForm(RE::Actor* actor);
+		/*
+		
 		std::uint64_t GetEquippedWeaponHandleID(RE::Actor* actor);
 		RE::ExtraDataList* GetEquippedWeaponExtraData(RE::Actor* actor);
 		*/
@@ -162,9 +170,13 @@ namespace F4CW {
 
 	namespace ARMOUtilities
 	{
+		void ModArmorCondition(ItemDegradation::ArmorConditionData conditionData, ItemDegradation::ArmorDegrade degradeData);
+
+		std::vector<RE::BGSInventoryItem> GetEquippedArmorInventoryItems(RE::Actor* actor);
+		RE::BGSInventoryItem GetEquippedArmorInventoryItemBasedOnKeyword(RE::Actor* actor, RE::BGSKeyword* keyword);
 		RE::BGSKeyword* GetPowerArmorTypeKeyword();
-		//void UpdateArmorStats(ItemDegradation::ArmorConditionData myConditionData);
-		//void UpdateArmorStatsOnHit(RE::Actor* actor, std::uint32_t eDamageLimb, std::uint32_t eIncomingDamageType, float fDamage);
+		void UpdateArmorStats(ItemDegradation::ArmorConditionData myConditionData);
+		void UpdateArmorStatsOnHit(RE::Actor* actor, std::uint32_t eDamageLimb, const bool isMelee, const bool isUnarmed, float fDamage);
 
 		RE::BGSKeyword* GetArmorRepairKeyword(RE::TESObjectARMO* myArmor);
 		RE::BGSListForm* GetLinkedArmorRepairListFromKeyword(RE::BGSKeyword* myKeyword);

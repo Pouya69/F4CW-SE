@@ -17,6 +17,16 @@
 #include <RE/P/PlayerCharacter.h>
 #include <format>
 #include "ItemDegradation.h"
+#include <RE/A/Actor.h>
+#include <RE/B/BGSInventoryItem.h>
+#include <RE/E/ENUM_FORM_ID.h>
+#include <RE/E/EquippedItem.h>
+#include <RE/E/ExtraDataList.h>
+#include <RE/T/TESObjectARMO.h>
+#include <RE/T/TESObjectWEAP.h>
+#include <RE/W/WEAPON_TYPE.h>
+#include <REX/LOG.h>
+#include "GameForms.h"
 
 namespace F4CW {
 	namespace ObScript {
@@ -306,9 +316,206 @@ namespace F4CW {
 			static constexpr auto SHORT_NAME = "shac"sv;
 		};
 
+		class ModCWValueCommand {
+		public:
+			static void Install() {
+				const auto functions = RE::SCRIPT_FUNCTION::GetConsoleFunctions();
+				const auto it = std::find_if(
+					functions.begin(),
+					functions.end(),
+					[&](auto&& a_elem) {
+						return _stricmp(a_elem.functionName, "ShowPivot") == 0;
+					});
+
+				if (it == functions.end()) {
+					LOG_WARNING("Failed to reigster console command: 'ShowPivot'");
+					return;
+				}
+
+				static std::array params{
+					RE::SCRIPT_PARAMETER{"skillName", RE::SCRIPT_PARAM_TYPE::kChar, true},
+					RE::SCRIPT_PARAMETER{"KarmaAmount", RE::SCRIPT_PARAM_TYPE::kInt, true},
+				};
+
+				*it = RE::SCRIPT_FUNCTION{ LONG_NAME.data(), SHORT_NAME.data(), it->output };
+				it->helpString = HelpString().data();
+				it->referenceFunction = false;
+				it->paramCount = static_cast<std::uint16_t>(params.size());
+				it->parameters = params.data();
+				it->executeFunction = Execute;
+
+				LOG_INFO("Registered 'ShowPivot' console command");
+			}
+
+		private:
+			static bool Execute(
+				const RE::SCRIPT_PARAMETER* a_parameters,
+				const char* a_compiledParams,
+				RE::TESObjectREFR* a_refObject,
+				RE::TESObjectREFR* a_container,
+				RE::Script* a_script,
+				RE::ScriptLocals* a_scriptLocals,
+				float&,
+				std::uint32_t& a_offset)
+			{
+				int karmaModAmount = 0;
+				std::array<char, 0x200> skillName = { '\0' };
+
+				auto paramsParsed = RE::Script::ParseParameters(
+					a_parameters,
+					a_compiledParams,
+					a_offset,
+					a_refObject,
+					a_container,
+					a_script,
+					a_scriptLocals,
+					skillName.data(),
+					&karmaModAmount
+				);
+
+				if (!paramsParsed || skillName[0] == '\0' || karmaModAmount == 0) {
+					LOG_TO_CONSOLE("Mods the player's karma.\nModCWValue SKILL/KARMA 100 OR ModCWValue SKILL/KARMA -100");
+					// CW_SkillsPapyrus::DEBUG_LogSkillsToConsole_Papyrus(std::monostate(), RE::PlayerCharacter::GetSingleton());
+					return true;
+				}
+
+				const float oldKarma = CWGlobals.Karma->value;
+
+				auto vm = RE::GameVM::GetSingleton()->GetVM();
+				// CWGlobals.Karma->value += karmaModAmount;
+				
+				std::string nameS = skillName.data();
+
+				if (_stricmp(nameS.c_str(), "karma") == 0) {
+					vm->DispatchStaticCall("TCW:F4CW", "ModPlayerKarma", nullptr, karmaModAmount);
+				}
+				else {
+					auto skillAV = GetSkillByName(nameS);
+					if (skillAV) {
+						auto player = RE::PlayerCharacter::GetSingleton();
+						player->SetBaseActorValue(*skillAV, karmaModAmount);
+						
+						// ModPermanentSkillValue(player, skillAV, karmaModAmount);
+						//auto s = std::format("'{}' new value for player: {}", GetBaseAVValue()).c_str();
+						//LOG_TO_CONSOLE();
+					}
+					else {
+						auto s = std::format("Skill '{}' is not a valid CWSkill. Mods the player's karma. ModCWValue SKILL/KARMA 100 OR ModCWValue SKILL/KARMA -100\n", nameS).c_str();
+						LOG_TO_CONSOLE(s);
+					}
+				}
+				
+
+				// LOG_TO_CONSOLE(std::format("Old Karma: {}, New Karma: {}", oldKarma, CWGlobals.Karma->value).c_str());
+				return true;
+			}
+
+			[[nodiscard]] static const std::string& HelpString()
+			{
+				static auto help = []()
+					{
+						std::string buf;
+						buf += "Mods the player's skill/karma.\nModCWValue 100 OR ModCWValue -100"sv;
+						return buf;
+					}();
+				return help;
+			}
+
+			static constexpr auto LONG_NAME = "ModCWValue"sv;
+			static constexpr auto SHORT_NAME = "mcwv"sv;
+		};
+
+		class ToggleRepairMenu {
+		public:
+			static void Install() {
+				const auto functions = RE::SCRIPT_FUNCTION::GetConsoleFunctions();
+				const auto it = std::find_if(
+					functions.begin(),
+					functions.end(),
+					[&](auto&& a_elem) {
+						return _stricmp(a_elem.functionName, "ToggleSafeZone") == 0;
+					});
+
+				if (it == functions.end()) {
+					LOG_WARNING("Failed to reigster console command: 'ToggleSafeZone'");
+					return;
+				}
+
+				static std::array params{
+					RE::SCRIPT_PARAMETER{"KarmaAmount", RE::SCRIPT_PARAM_TYPE::kInt, true},
+				};
+
+				*it = RE::SCRIPT_FUNCTION{ LONG_NAME.data(), SHORT_NAME.data(), it->output };
+				it->helpString = HelpString().data();
+				it->referenceFunction = false;
+				it->paramCount = static_cast<std::uint16_t>(params.size());
+				it->parameters = params.data();
+				it->executeFunction = Execute;
+
+				LOG_INFO("Registered 'ToggleSafeZone' console command");
+			}
+
+		private:
+			static bool Execute(
+				const RE::SCRIPT_PARAMETER* a_parameters,
+				const char* a_compiledParams,
+				RE::TESObjectREFR* a_refObject,
+				RE::TESObjectREFR* a_container,
+				RE::Script* a_script,
+				RE::ScriptLocals* a_scriptLocals,
+				float&,
+				std::uint32_t& a_offset)
+			{
+				int karmaModAmount = 0;
+
+				auto paramsParsed = RE::Script::ParseParameters(
+					a_parameters,
+					a_compiledParams,
+					a_offset,
+					a_refObject,
+					a_container,
+					a_script,
+					a_scriptLocals,
+					&karmaModAmount
+				);
+
+				if (!paramsParsed || karmaModAmount == 0) {
+					LOG_TO_CONSOLE("Closing repair menu...");
+					F4CW_Menus::RepairMenu::CloseRepairMenu();
+					// CW_SkillsPapyrus::DEBUG_LogSkillsToConsole_Papyrus(std::monostate(), RE::PlayerCharacter::GetSingleton());
+					return true;
+				}
+
+				if (karmaModAmount != 0) {
+					LOG_TO_CONSOLE("Opening repair menu...");
+					// Pipboy_Repair::Call
+					iCurrentRepairMenuType = karmaModAmount;
+					F4CW_Menus::RepairMenu::OpenRepairMenu();
+				}
+
+				
+				return true;
+			}
+
+			[[nodiscard]] static const std::string& HelpString()
+			{
+				static auto help = []()
+					{
+						std::string buf;
+						buf += "Opens/Closes Repair menu\nToggleRepairMenu 0 or ToggleRepairMenu 1"sv;
+						return buf;
+					}();
+				return help;
+			}
+
+			static constexpr auto LONG_NAME = "ToggleRepairMenu"sv;
+			static constexpr auto SHORT_NAME = "tgrpm"sv;
+		};
+
 
 		static void Install() {
-
+			ToggleRepairMenu::Install();
+			ModCWValueCommand::Install();
 			ShowPlayerSkills::Install();
 			ShowWeaponCondition::Install();
 			ShowArmorCondition::Install();

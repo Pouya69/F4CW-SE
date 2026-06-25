@@ -17,6 +17,11 @@
 
 
 namespace Skills {
+	extern RE::BSTArray<RE::BGSPerk*> CWPerksLevelUp;
+	extern RE::BSTArray<RE::ActorValueInfo*> CWSkillsLevelUp;
+	extern RE::BSTArray<RE::BGSSoundDescriptorForm*> ScaleformSkillSounds;
+	extern RE::BSTArray<RE::BGSSoundDescriptorForm*> ScaleformPerkSounds;
+
 	extern std::vector<RE::BGSPerk*> CWNPCPerksList;
 	extern std::vector<RE::ActorValueInfo*> SkillsList;
 	extern std::unordered_map<std::string, RE::ActorValueInfo*> strSkillMap;
@@ -56,9 +61,10 @@ void InitializeGlobalVariables(RE::TESDataHandler* dataHandler);
 
 void InitializePerks(RE::TESDataHandler* dataHandler, std::string mod_esm);
 
+void GetLevelUpFormsFromGame();
+
 // Internal Functions
 // ===========================================================================
-
 
 float GetAVValue(RE::Actor* Actor, RE::ActorValueInfo* valueInfo);
 float GetBaseAVValue(RE::Actor* Actor, RE::ActorValueInfo* valueInfo);

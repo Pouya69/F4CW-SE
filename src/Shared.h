@@ -31,18 +31,28 @@ namespace Shared {
 	void InitializeSharedForms(RE::TESDataHandler* dataHandler);
 	
 	template<typename T>
-	void RegisterFunction(Scaleform::GFx::Value* a_dest, Scaleform::Ptr<Scaleform::GFx::ASMovieRootBase> a_movieRoot, const char* a_func_name) {
+	bool RegisterFunction(Scaleform::GFx::Value* a_dest, Scaleform::Ptr<Scaleform::GFx::ASMovieRootBase> a_movieRoot, const char* a_func_name) {
 		Scaleform::GFx::FunctionHandler* func = new T;
 		Scaleform::GFx::Value funcValue;
 
 		a_movieRoot->CreateFunction(&funcValue, func);
-		a_dest->SetMember(a_func_name, funcValue);
+		return a_dest->SetMember(a_func_name, funcValue);
 	}
 
 	namespace HUD {
 		void UpdateMenus(Scaleform::Ptr<Scaleform::GFx::ASMovieRootBase> movieRoot);
 	}
 	
+	bool IsXPMetervisible();
+
+	bool InMenuMode();
+
+	float ConvertPercentageToFloat(std::uint8_t percentage);
+
+	const char* GetItemDisplayName(RE::ExtraDataList* myExtraData, RE::TESBoundObject* baseForm);
+
+	void RemovePipboyInventoryItem(const RE::BGSInventoryItem* item, bool bSilent);
+
 }
 
 bool WeaponHasKeyword(RE::TESObjectWEAP* weapon, RE::BGSKeyword* keyword);

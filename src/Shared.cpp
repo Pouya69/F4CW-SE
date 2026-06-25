@@ -13,6 +13,26 @@
 #include <RE/T/TESObjectREFR.h>
 #include <RE/T/TESObjectWEAP.h>
 #include <RE/T/TESRace.h>
+#include <cstdint>
+#include <ios>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <RE/B/BGSInventoryItem.h>
+#include <RE/B/BSFixedString.h>
+#include <RE/E/ExtraDataList.h>
+#include <RE/E/ExtraTextDisplayData.h>
+#include <RE/I/IMenu.h>
+#include <RE/P/PlayerCharacter.h>
+#include <RE/S/SendHUDMessage.h>
+#include <RE/S/Setting.h>
+#include <RE/T/TESBoundObject.h>
+#include <RE/T/TESGlobal.h>
+#include <RE/U/UI.h>
+#include <Scaleform/G/GFx_ASMovieRootBase.h>
+#include <Scaleform/G/GFx_Value.h>
+#include <Scaleform/P/Ptr.h>
+#include <REX/LOG.h>
 
 namespace Shared {
 	RE::BGSKeyword* noDegradation;
@@ -33,10 +53,74 @@ namespace Shared {
 		crWeaponRanged = dataHandler->LookupForm<RE::BGSKeyword>(0x189348, "Fallout4.esm");
 		noDegradation = dataHandler->LookupForm<RE::BGSKeyword>(0x0DEDC5, MOD_ESM);
 
-		fAutomaticWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x0E09D6, MOD_ESM);
-		fBoltWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x0E09D7, MOD_ESM);
+		fAutomaticWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x0E0A1F, MOD_ESM);
+		fBoltWeaponConditionReduction = dataHandler->LookupForm<RE::TESGlobal>(0x0E0A20, MOD_ESM);
 
-		fArmourConditionReductionPerPercentage = dataHandler->LookupForm<RE::TESGlobal>(0x0E09D8, MOD_ESM);
+		fArmourConditionReductionPerPercentage = dataHandler->LookupForm<RE::TESGlobal>(0x0E0A21, MOD_ESM);
+	}
+
+	bool IsXPMetervisible()
+	{
+		RE::BSFixedString menuString("HUDMenu");
+		RE::IMenu* menu = RE::UI::GetSingleton()->GetMenu(menuString).get();
+		Scaleform::GFx::Value openValue;
+
+		// menu->uiMovie->asMovieRoot->GetVariable(&openValue, "root.XPMeter_mc.visible");
+		if (!menu->uiMovie->asMovieRoot->GetVariable(&openValue, "root.HUDNotificationsGroup_mc.XPMeter_mc.visible")) {
+			REX::DEBUG("root.HUDNotificationsGroup_mc.XPMeter_mc.visible did not return a value."sv);
+		}
+		
+		return openValue.GetBoolean();
+	}
+
+	bool InMenuMode()
+	{
+		RE::UI* ui = RE::UI::GetSingleton();
+		return (
+			(ui->menuMode >= 1)
+			|| ui->GetMenuOpen("CookingMenu")
+			|| ui->GetMenuOpen("FaderMenu")
+			|| ui->GetMenuOpen("FavoritesMenu")
+			|| ui->GetMenuOpen("PowerArmorModMenu")
+			|| ui->GetMenuOpen("RobotModMenu")
+			|| ui->GetMenuOpen("VATSMenu")
+			|| ui->GetMenuOpen("WorkshopMenu")
+			|| ui->GetMenuOpen("DialogueMenu")
+			);
+	}
+
+	float ConvertPercentageToFloat(std::uint8_t percentage)
+	{
+		return (percentage / static_cast<float>(100));
+	}
+
+	const char* GetItemDisplayName(RE::ExtraDataList* myExtraData, RE::TESBoundObject* baseForm)
+	{
+		RE::BSExtraData* extraData = myExtraData->GetByType(RE::EXTRA_DATA_TYPE::kTextDisplayData);
+		RE::ExtraTextDisplayData* displayText = static_cast<RE::ExtraTextDisplayData*>(extraData);
+		if (displayText)
+		{
+			return displayText->GetDisplayName(baseForm).c_str();
+		}
+		else
+		{
+			return "";
+		}
+	}
+
+	void RemovePipboyInventoryItem(const RE::BGSInventoryItem* item, bool bSilent)
+	{
+		if (!bSilent)
+		{
+			std::string itemName = GetItemDisplayName(item->stackData->extra.get(), item->object);
+			itemName.append(" ");
+			itemName.append(RE::GameSettingCollection::GetSingleton()->GetSetting("sRemoveItemfromInventory")->GetString());
+
+			RE::SendHUDMessage::ShowHUDMessage(itemName.c_str(), "ITMGenericDown", false, true);
+		}
+		RE::PlayerCharacter::GetSingleton()->inventoryList->RemoveItem1(item->object, item->GetCount(), false);
+		//RE::PipboyDataManager::GetSingleton()->
+		//RemovePipboyItem(&(*g_PipboyDataManager)->inventoryData, item);
 	}
 
 }
