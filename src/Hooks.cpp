@@ -382,6 +382,21 @@ namespace F4CW {
 			return a_data->attackDelaySec;
 		}
 
+		DetourXS hook_GetWeaponDisplayDamage;
+		typedef float(GetWeaponDisplayDamageSig)(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>&, const RE::TESAmmo*, float);
+		REL::Relocation<GetWeaponDisplayDamageSig> GetWeaponDisplayDamageOriginal;
+		float Hook_GetWeaponDisplayDamage(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>& a_weapon, const RE::TESAmmo* a_ammo, float a_condition)
+		{
+			// RE::TESObjectWEAP::InstanceData* weaponInstanceData = static_cast<RE::TESObjectWEAP::InstanceData*>(a_weapon.instanceData.get());
+
+			float retailDamage = GetWeaponDisplayDamageOriginal(a_weapon, a_ammo, a_condition);
+
+			if (a_condition != -1.0f || a_condition < 0.75f)
+				retailDamage = retailDamage * (0.5f + min((0.5f * a_condition) / 0.75f, 0.5f));
+
+			return retailDamage;
+		}
+
 
 		DetourXS hook_ClosedownPipboy;
 		typedef void(ClosedownPipboySig)(RE::PipboyManager*);
@@ -500,7 +515,8 @@ namespace F4CW {
 				RegisterDetourFunction(hook_TESObjectWeaponFire, RE::ID::TESObjectWEAP::Fire, &Hook_TESObjectWeaponFire, TESObjectWeaponFireOriginal, "TESObjectWeaponFire");
 				RegisterDetourFunction(hook_CombatFormulasCalcTargetedLimbDamage, RE::ID::CombatFormulas::CalcTargetedLimbDamage, &Hook_CombatFormulasCalcTargetedLimbDamage, CombatFormulasCalcTargetedLimbDamageOriginal, "CalcTargetedLimbDamage");
 				RegisterDetourFunction(hook_SetHealthPerc, RE::ID::ExtraDataList::SetHealthPerc, &Hook_ExtraDataListSetHealthPerc, SetHealthPercOriginal, "SetHealthPerc");
-				
+				RegisterDetourFunction(hook_GetWeaponDisplayDamage, RE::ID::CombatFormulas::GetWeaponDisplayDamage, &Hook_GetWeaponDisplayDamage, GetWeaponDisplayDamageOriginal, "GetWeaponDisplayDamage");
+
 				// RegisterDetourFunction(hook_ClosedownPipboy, RE::ID::PipboyManager::ClosedownPipboy, &Hook_ClosedownPipboy, ClosedownPipboyOriginal, "ClosedownPipboy");
 				// RegisterDetourFunction(hook_LowerPipboy, RE::ID::PipboyManager::LowerPipboy, &Hook_LowerPipboy, LowerPipboyOriginal, "LowerPipboy");
 

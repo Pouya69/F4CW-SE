@@ -169,7 +169,7 @@ namespace F4CW_Menus {
 
 		std::uint32_t GetSkillArrayIndexByEditorID(const char* myEditorID);
 
-		float GetSkillPointsToAdd();
+		float GetSkillPointsToAdd(std::uint16_t levelsToProgress = 1);
 
 		bool CanLevelUpMenuBeShown();
 
@@ -183,7 +183,7 @@ namespace F4CW_Menus {
 		void SetSkillTagged(RE::ActorValueInfo* a_skill, bool a_tag);
 
 		// Called from 'LevelIncrease::Event'
-		void HandleLevelUp();
+		void HandleLevelUp(std::uint16_t levelsToProgress = 1);
 
 		void ModSkillByName(std::string a_skillName, std::uint32_t a_value, std::uint32_t a_baseValue);
 

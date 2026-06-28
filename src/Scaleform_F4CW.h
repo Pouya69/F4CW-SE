@@ -77,6 +77,13 @@ public:
     virtual void Call(const Params& a_params);
 };
 
+class PipboyInventory_Ready : public Scaleform::GFx::FunctionHandler
+{
+public:
+
+    virtual void Call(const Params& a_params);
+};
+
 class Debug_ActionScript : public Scaleform::GFx::FunctionHandler
 {
 public:
@@ -85,6 +92,20 @@ public:
 };
 
 class Pipboy_Repair : public Scaleform::GFx::FunctionHandler
+{
+public:
+
+    virtual void Call(const Params& a_params);
+};
+
+class Pipboy_AddCND_ForItemCard : public Scaleform::GFx::FunctionHandler
+{
+public:
+
+    virtual void Call(const Params& a_params);
+};
+
+class Pipboy_IsRepairMenuOpen : public Scaleform::GFx::FunctionHandler
 {
 public:
 

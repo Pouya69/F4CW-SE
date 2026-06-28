@@ -59,6 +59,8 @@ namespace F4CW {
 		void Hook_ExtraDataListSetHealthPerc(RE::ExtraDataList* a_this, float a_health);
 		float Hook_GetWeaponDisplayRateOfFire(const RE::TESObjectWEAP& a_weapon, const RE::TESObjectWEAP::InstanceData* a_data);
 
+		float Hook_GetWeaponDisplayDamage(const RE::BGSObjectInstanceT<RE::TESObjectWEAP>& a_weapon, const RE::TESAmmo* a_ammo, float a_condition);
+
 		void Hook_ClosedownPipboy(RE::PipboyManager* a_manager);
 		void Hook_LowerPipboy(RE::PipboyManager* a_manager, RE::PipboyManager::LOWER_REASON a_reason);
 

@@ -79,6 +79,12 @@ float CalculateNewDamageIfRepaired(F4CW::ItemDegradation::WeaponConditionData we
 
 	float baseDamage = baseWPNForm->weaponData.attackDamage;
 
+	if (newMaxCondition != -1.0f || newMaxCondition < 0.75f)
+		baseDamage = baseDamage * (0.5f + min((0.5f * newMaxCondition) / 0.75f, 0.5f));
+
+	return baseDamage;
+
+	/*
 	float minimum = 0.66;
 
 	std::uint32_t flags = weaponData.instance->flags.underlying();
@@ -102,7 +108,9 @@ float CalculateNewDamageIfRepaired(F4CW::ItemDegradation::WeaponConditionData we
 	}
 
 	float newDamage = F4CW::WPNUtilities::CalculateUpdatedDamageValue(baseDamage, minimum, newMaxCondition, F4CW::WPNUtilities::CalculateSkillBonusFromActor(weaponData));
-	return newDamage;
+	*/
+
+	//return baseDamage * (1.0f + (newMaxCondition - weaponData.extraData->GetHealthPerc()));
 	
 }
 
@@ -149,14 +157,14 @@ int CalculateCostToRepairItem(F4CW::ItemDegradation::ArmorConditionData armorDat
 
 float CalculateMaxRepairCondition(int vendorSkill)
 {
-	float maxRepairCondition = (float)(0.4 + (0.006 * vendorSkill));
+	float maxRepairCondition = min(1.0f, (float)(0.6 + (0.006 * vendorSkill)));
 
 	return maxRepairCondition;
 }
 
 float CalculateMaxRepairConditionPlayer(int playerSkill)
 {
-	float maxRepairCondition = (float)(0.4 + (0.006 * playerSkill));
+	float maxRepairCondition = min(1.0f, (float)(0.6 + (0.006 * playerSkill)));
 
 	return maxRepairCondition;
 }

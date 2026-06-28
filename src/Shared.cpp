@@ -115,8 +115,8 @@ namespace Shared {
 			std::string itemName = GetItemDisplayName(item->stackData->extra.get(), item->object);
 			itemName.append(" ");
 			itemName.append(RE::GameSettingCollection::GetSingleton()->GetSetting("sRemoveItemfromInventory")->GetString());
-
-			RE::SendHUDMessage::ShowHUDMessage(itemName.c_str(), "ITMGenericDown", false, true);
+			RE::UIUtils::PlayPipboySound("OBJLunchboxKidsRobotBuild");
+			RE::SendHUDMessage::ShowHUDMessage(itemName.c_str(), "", false, true);
 		}
 		RE::PlayerCharacter::GetSingleton()->inventoryList->RemoveItem1(item->object, item->GetCount(), false);
 		//RE::PipboyDataManager::GetSingleton()->

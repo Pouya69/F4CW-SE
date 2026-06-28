@@ -1239,6 +1239,17 @@ float F4CW::WPNUtilities::GetWeaponDamage(ItemDegradation::WeaponConditionData m
 		return 0.0;
 	}
 
+	float baseDamage = myConditionData.instance->attackDamage;
+	const float newMaxCondition = myConditionData.extraData->GetHealthPerc();
+
+	if (newMaxCondition != -1.0f || newMaxCondition < 0.75f)
+		baseDamage = baseDamage * (0.5f + min((0.5f * newMaxCondition) / 0.75f, 0.5f));
+
+	return baseDamage;
+
+	// return myConditionData.instance->attackDamage;
+
+	/*
 	RE::TESObjectWEAP* baseWPNForm = static_cast<RE::TESObjectWEAP*>(myConditionData.Form);
 	RE::TESObjectWEAP::InstanceData* myInstance = myConditionData.instance;
 
@@ -1305,6 +1316,7 @@ float F4CW::WPNUtilities::GetWeaponDamage(ItemDegradation::WeaponConditionData m
 	return newDamage;
 	//myInstance->baseDamage = newDamage;
 	//REX::WARN("Base Damage Type: Base Damage = %f, New Damage = %f", baseDamage, newDamage);
+	*/
 }
 
 double F4CW::WPNUtilities::CalculateUpdatedRateOfFireValue(ItemDegradation::WeaponConditionData myConditionData, double currentCondition)

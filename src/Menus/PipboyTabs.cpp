@@ -384,6 +384,7 @@ bool F4CW_Menus::PipboyTabs::RegisterScaleform(Scaleform::GFx::Movie* a_view, Sc
 
 	currentSWFPathString = swfPath.GetString();
 
+	REX::DEBUG(currentSWFPathString.c_str());
 	if (_stricmp("Interface/PipboyMenu.swf", currentSWFPathString.c_str()) == 0) {
 		Scaleform::GFx::Value loader, urlRequest, root;
 
@@ -412,6 +413,8 @@ bool F4CW_Menus::PipboyTabs::RegisterScaleform(Scaleform::GFx::Movie* a_view, Sc
 		Shared::RegisterFunction<Pipboy_CheckForcedLevelUp>(&cwPipboy, a_view->asMovieRoot, "IsForcedLevelUp");
 		Shared::RegisterFunction<Pipboy_CheckWorkshopTab>(&cwPipboy, a_view->asMovieRoot, "IsWorkshopTabHidden");
 		Shared::RegisterFunction<Pipboy_UpdateItemCardsOnSection>(&cwPipboy, a_view->asMovieRoot, "UpdateItemCardsOnSection");
+		Shared::RegisterFunction<Pipboy_IsRepairMenuOpen>(&cwPipboy, a_view->asMovieRoot, "IsRepairMenuOpen");
+		Shared::RegisterFunction<Pipboy_AddCND_ForItemCard>(&cwPipboy, a_view->asMovieRoot, "AddCND_ItemCard");
 
 		if (!loader.Invoke("load", nullptr, &urlRequest, 1)) {
 			REX::DEBUG("Could not load in CWPipboy");
@@ -430,6 +433,32 @@ bool F4CW_Menus::PipboyTabs::RegisterScaleform(Scaleform::GFx::Movie* a_view, Sc
 		// root.Invoke("root.Menu_mc.onCodeObjCreate", nullptr, nullptr, 0);
 
 		REX::DEBUG("CWPipboy.swf");
+
+
+		// a_view->asMovieRoot->GetVariable(&bgsCodeObj, "root.codeObj");
+		/*
+		if (!Shared::RegisterFunction<PipboyInventory_Ready>(&bgsCodeObj, a_view->asMovieRoot, "ready")) {
+			REX::DEBUG("Could not register 'PipboyInventory_Ready' for 'ready'");
+		}
+
+		
+		Shared::RegisterFunction<Debug_ActionScript>(&bgsCodeObj, a_view->asMovieRoot, "DebugPrint");
+		*/
+
+
+		REX::DEBUG("Inventory.swf");
+
+
+
+
+
+	}
+	if (_stricmp("Interface/Pipboy_InvPage.swf", currentSWFPathString.c_str()) == 0) {
+
+		
+
+		//Scaleform::GFx::Value cwf = "CWPipboy.swf";
+		//a_view->asMovieRoot->CreateObject(&urlRequest, "flash.net.URLRequest", &cwf, 1);
 	}
 
 	return true;

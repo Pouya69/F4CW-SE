@@ -1,4 +1,38 @@
 #include "LevelUpMenu.h"
+#include <string.h>
+#include <Windows.h>
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <cstdint>
+#include <future>
+#include <string>
+#include <thread>
+#include <variant>
+#include <RE/A/ActorValueInfo.h>
+#include <RE/A/ACTOR_VALUE_MODIFIER.h>
+#include <RE/B/BGSPerk.h>
+#include <RE/B/BSScript_IVirtualMachine.h>
+#include <RE/B/BSSoundHandle.h>
+#include <RE/B/BSStringT.h>
+#include <RE/B/BSTArray.h>
+#include <RE/P/PlayerCharacter.h>
+#include <RE/T/TESDataHandler.h>
+#include <RE/T/TESGlobal.h>
+#include <RE/U/UI.h>
+#include <RE/U/UIMessageQueue.h>
+#include <RE/U/UI_MESSAGE_TYPE.h>
+#include <Scaleform/G/GFx_ASMovieRootBase.h>
+#include <Scaleform/G/GFx_Movie.h>
+#include <Scaleform/G/GFx_Value.h>
+#include <Scaleform/P/Ptr.h>
+#include <REX/LOG.h>
+#include <GameForms.h>
+#include <IGlobalConfig.h>
+#include <PerkHelpers.h>
+#include <Serialization.h>
+#include <Shared.h>
+#include <skills.h>
 
 namespace F4CW_Menus {
 	namespace LevelUpMenu {
@@ -398,7 +432,7 @@ namespace F4CW_Menus {
 				return -1;
 			}
 		}
-		float GetSkillPointsToAdd()
+		float GetSkillPointsToAdd(std::uint16_t levelsToProgress)
 		{
 			// Fallout 3 formula is 10 + base intelligence
 			// Extra 3 points if the player has "Educated" perk
@@ -432,7 +466,7 @@ namespace F4CW_Menus {
 				}
 			}
 
-			return skillPointsValue;
+			return skillPointsValue * levelsToProgress;
 		}
 		bool CanLevelUpMenuBeShown()
 		{
@@ -531,9 +565,9 @@ namespace F4CW_Menus {
 			}
 		}
 
-		void HandleLevelUp()
+		void HandleLevelUp(std::uint16_t levelsToProgress)
 		{
-			float pointsToAdd = GetSkillPointsToAdd();
+			float pointsToAdd = GetSkillPointsToAdd(levelsToProgress);
 
 			F4CWSerialization::ModSkillPoints(pointsToAdd);
 

@@ -342,6 +342,9 @@ void RepairMenu_RepairItems::Call(const Params& a_params)
 	}
 
 	F4CW_Menus::RepairMenu::RepairMenuFunctions::GiveCapsToVendor(totalRepairCost);
+	
+	RE::UIUtils::PlayMenuSound("OBJLunchboxKidsRobotBuild");
+	// RE::SendHUDMessage::ShowHUDMessage(std::format("Removed {}.", repairCount).c_str(), "", false, true);
 	F4CW_Menus::RepairMenu::RepairMenuFunctions::HandleMenuOpen(a_params.movie->asMovieRoot.get(), totalRepairCost);
 }
 
@@ -435,3 +438,40 @@ void Pipboy_CheckForcedLevelUp::Call(const Params& a_params)
 
 void WaitForRepairMenu()
 {}
+
+void Pipboy_AddCND_ForItemCard::Call(const Params& a_params)
+{
+	Scaleform::GFx::Value handleIDValue;
+	float returnValue = -1.0f;
+	std::int32_t index = a_params.args[0].GetInt();
+	const RE::BGSInventoryItem* currentHoveredItem = InventoryUtils::GetInventoryItemByIndex(index);
+
+	switch (currentHoveredItem->object->GetFormType())
+	{
+	case RE::ENUM_FORM_ID::kWEAP:
+		returnValue = F4CW::ItemDegradation::WeaponConditionData(RE::PlayerCharacter::GetSingleton(), currentHoveredItem->object, currentHoveredItem->stackData->extra.get()).extraData->GetHealthPerc();
+	case RE::ENUM_FORM_ID::kARMO:
+		returnValue = F4CW::ItemDegradation::ArmorConditionData(RE::PlayerCharacter::GetSingleton(), currentHoveredItem->object, currentHoveredItem->stackData->extra.get()).extraData->GetHealthPerc();
+	default:
+		break;
+	}
+
+	REX::DEBUG(std::format("AddCND_ForItemCard - Called. Return Value: {}", returnValue).c_str());
+	*a_params.retVal = returnValue;
+
+	// a_params.args.getu
+	// const F4CW::ItemDegradation::WeaponConditionData condition = F4CW::ItemDegradation::WeaponConditionData(RE::PlayerCharacter::GetSingleton());
+}
+
+void PipboyInventory_Ready::Call(const Params& a_params)
+{
+	REX::DEBUG("AS3, PipboyInventoryRead - Called.");
+}
+
+void Pipboy_IsRepairMenuOpen::Call(const Params& a_params)
+{
+	auto ui = RE::UI::GetSingleton();
+	RE::BSFixedString repairMenuStr("RepairMenu");
+
+	*a_params.retVal = ui ? RE::UI::GetSingleton()->GetMenuOpen(repairMenuStr) : false;
+}
